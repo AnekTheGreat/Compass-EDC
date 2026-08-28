@@ -2,19 +2,19 @@
   "name": "Compass EDC",
   "short_name": "Compass EDC",
   "description": "Compass, elevation, level, and location instrument for everyday carry",
-  "id": "/",
-  "scope": "/",
-  "start_url": "/index.html",
+  "id": "https://anekthegreat.github.io/Compass-EDC/",
+  "scope": "./",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#a9d8f7",
   "theme_color": "#a9d8f7",
   "orientation": "portrait",
   "categories": ["utilities", "navigation"],
   "icons": [
-    { "src": "/icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
