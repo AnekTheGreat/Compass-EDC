@@ -2,6 +2,23 @@
 'use strict';
 
 // ---------- STATE ----------
+var SMOOTH = 0.12;   // EMA alpha — lower = smoother (0.12 ≈ 80 ms time-constant)
+var DEAD_ZONE = 0.8; // ignore changes smaller than this (degrees)
+var rawHeading = null;
+var smoothHeading = null;
+var smoothPitch = 0, smoothRoll = 0;
+var rafPending = false;
+
+function angleDiff(a, b) {
+  var d = a - b;
+  return ((d + 540) % 360) - 180; // shortest arc, range (−180, 180]
+}
+function lerpAngle(prev, next, t) {
+  if (prev == null) return next;
+  var diff = angleDiff(next, prev);
+  return (prev + diff * t + 360) % 360;
+}
+
 var state = {
   unitSystem: localStorage.getItem('cedc_units') || 'metric', // 'metric' | 'imperial'
   useTrueNorth: localStorage.getItem('cedc_truenorth') === '1',
@@ -75,8 +92,8 @@ function cardinal(deg){
 
 // ---------- COMPASS ----------
 function updateCompassUI(){
-  if (state.heading == null) return;
-  var displayHeading = state.heading;
+  if (smoothHeading == null) return;
+  var displayHeading = smoothHeading;
   if (state.useTrueNorth) {
     displayHeading = (displayHeading + state.declination + 360) % 360;
   }
@@ -122,6 +139,16 @@ $('compass-screen').addEventListener('dblclick', function(){
   updateCompassUI();
 });
 
+function scheduleUpdate(){
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(function(){
+    rafPending = false;
+    updateCompassUI();
+    updateLevelUI();
+  });
+}
+
 function handleOrientation(e){
   var heading;
   if (e.webkitCompassHeading != null) {
@@ -133,21 +160,35 @@ function handleOrientation(e){
   } else {
     return;
   }
-  state.heading = (heading + 360) % 360;
-  state.tilt = e.beta != null ? Math.abs(e.beta) : 0;
-  updateCompassUI();
+  rawHeading = (heading + 360) % 360;
+  state.heading = rawHeading;
 
-  // level tab uses beta/gamma
-  if (e.beta != null && e.gamma != null) {
-    state.pitch = e.beta > 90 ? 180 - e.beta : (e.beta < -90 ? -180 - e.beta : e.beta);
-    state.roll = e.gamma;
-    updateLevelUI();
+  // EMA smoothing with angular-wrap handling
+  smoothHeading = lerpAngle(smoothHeading, rawHeading, SMOOTH);
+  // dead zone: snap when difference is tiny to prevent micro-jitter
+  if (smoothHeading != null && Math.abs(angleDiff(rawHeading, smoothHeading)) < DEAD_ZONE) {
+    smoothHeading = rawHeading;
   }
+
+  state.tilt = e.beta != null ? Math.abs(e.beta) : 0;
+
+  // level tab — EMA smooth pitch/roll
+  if (e.beta != null && e.gamma != null) {
+    var rawPitch = e.beta > 90 ? 180 - e.beta : (e.beta < -90 ? -180 - e.beta : e.beta);
+    var rawRoll = e.gamma;
+    state.pitch = rawPitch;
+    state.roll = rawRoll;
+    // smooth (dead zone doesn't apply to level — continuous response is expected)
+    smoothPitch += (rawPitch - smoothPitch) * SMOOTH;
+    smoothRoll  += (rawRoll  - smoothRoll)  * SMOOTH;
+  }
+
+  scheduleUpdate();
 }
 
 // ---------- LEVEL ----------
 function updateLevelUI(){
-  var pitch = state.pitch, roll = state.roll;
+  var pitch = smoothPitch, roll = smoothRoll;
   $('level-pitch').textContent = pitch.toFixed(1);
   $('level-roll').textContent = roll.toFixed(1);
   var maxOffset = 90;
@@ -157,7 +198,7 @@ function updateLevelUI(){
   var cx = 140 + dx, cy = 140 + dy;
   bubble.setAttribute('cx', cx);
   bubble.setAttribute('cy', cy);
-  var isFlat = Math.abs(pitch) < 1 && Math.abs(roll) < 1;
+  var isFlat = Math.abs(state.pitch) < 1 && Math.abs(state.roll) < 1;
   bubble.setAttribute('fill', isFlat ? '#2fa66b' : '#ff6f61');
   $('level-flat-msg').textContent = isFlat ? 'Level' : '';
 }
