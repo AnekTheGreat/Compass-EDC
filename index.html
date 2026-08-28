@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Compass EDC</title>
+<meta name="theme-color" content="#a9d8f7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Compass EDC">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icons/icon-192.png">
+<style>
+:root{
+  --bg-top:#cdeaff;
+  --bg-mid:#a9d8f7;
+  --bg-bot:#8fc7ee;
+  --glass:rgba(255,255,255,0.38);
+  --glass-strong:rgba(255,255,255,0.55);
+  --glass-line:rgba(255,255,255,0.65);
+  --line:rgba(255,255,255,0.5);
+  --text:#0e3350;
+  --dim:#4d7999;
+  --dimmer:#7ea2bd;
+  --accent:#ff6f61;
+  --accent2:#2fa66b;
+  --amber:#e0983a;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{
+  margin:0;padding:0;height:100%;color:var(--text);
+  overflow:hidden;overscroll-behavior:none;
+  background:
+    radial-gradient(circle at 20% 8%, rgba(255,255,255,0.9), rgba(255,255,255,0) 40%),
+    radial-gradient(circle at 85% 15%, rgba(255,255,255,0.7), rgba(255,255,255,0) 35%),
+    linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 50%, var(--bg-bot) 100%);
+  background-attachment:fixed;
+}
+body::before{
+  content:'';
+  position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(ellipse 220px 90px at 12% 22%, rgba(255,255,255,0.85), rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 260px 100px at 78% 12%, rgba(255,255,255,0.7), rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 200px 80px at 88% 60%, rgba(255,255,255,0.55), rgba(255,255,255,0) 70%),
+    radial-gradient(ellipse 240px 90px at 8% 78%, rgba(255,255,255,0.5), rgba(255,255,255,0) 70%);
+}
+#app{
+  position:relative;z-index:1;
+  display:flex;flex-direction:column;height:100vh;height:100dvh;
+  padding-top:env(safe-area-inset-top);
+}
+.screen{
+  flex:1;display:none;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+  padding:0 20px 12px;
+}
+.screen.active{display:flex;}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 2px 4px;
+}
+.topbar .title{font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);font-weight:600;}
+.topbar .unitbtn{
+  font-size:11px;letter-spacing:1px;color:var(--dim);border:1px solid var(--glass-line);
+  padding:6px 12px;border-radius:20px;background:var(--glass);
+  backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.8), 0 2px 8px rgba(60,120,160,0.12);
+}
+.topbar .unitbtn.on{color:var(--text);border-color:var(--dim);}
+
+/* ---------- GLASS ---------- */
+.glass{
+  background:var(--glass);
+  backdrop-filter:blur(22px) saturate(180%);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid var(--glass-line);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.9),
+    inset 0 -6px 14px rgba(255,255,255,0.15),
+    0 8px 24px rgba(60,120,160,0.16),
+    0 2px 6px rgba(60,120,160,0.1);
+}
+
+/* ---------- COMPASS ---------- */
+#compass-screen{align-items:center;justify-content:flex-start;padding-top:8px;}
+.heading-big{
+  font-size:64px;font-weight:200;line-height:1;margin-top:6px;
+  font-variant-numeric:tabular-nums;letter-spacing:-1px;
+  color:var(--text);text-shadow:0 1px 0 rgba(255,255,255,0.6);
+}
+.heading-big sup{font-size:26px;font-weight:200;color:var(--dim);}
+.heading-label{font-size:14px;letter-spacing:4px;color:var(--dim);margin-top:2px;text-transform:uppercase;}
+.dial-wrap{
+  position:relative;width:290px;height:290px;margin:20px auto 6px;
+  border-radius:50%;
+}
+.dial-wrap .glass-disc{
+  position:absolute;inset:0;border-radius:50%;
+}
+.dial-wrap svg{width:100%;height:100%;display:block;position:relative;z-index:1;}
+.needle-tip{
+  position:absolute;top:-2px;left:50%;transform:translateX(-50%);z-index:2;
+  width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;
+  border-bottom:12px solid var(--accent);
+  filter:drop-shadow(0 2px 3px rgba(255,111,97,0.5));
+}
+.mode-row{display:flex;gap:10px;margin-top:10px;}
+.mode-pill{
+  font-size:11px;letter-spacing:1.5px;color:var(--dim);border:1px solid var(--glass-line);
+  padding:7px 16px;border-radius:20px;text-transform:uppercase;
+  background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.8);
+}
+.mode-pill.on{color:#fff;background:linear-gradient(180deg, #5bb8f2, #2f8fd6);border-color:#2f8fd6;box-shadow:inset 0 1px 0 rgba(255,255,255,0.5), 0 3px 10px rgba(47,143,214,0.35);}
+.calib-banner{
+  margin-top:14px;font-size:12px;color:#8a5a12;border:1px solid rgba(224,152,58,0.4);
+  background:rgba(255,231,190,0.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  padding:9px 16px;border-radius:14px;display:none;text-align:center;
+}
+.calib-banner.show{display:block;}
+.stat-row{display:flex;width:100%;max-width:320px;justify-content:space-between;margin-top:22px;padding:12px 10px;border-radius:18px;}
+.stat{text-align:center;flex:1;}
+.stat .v{font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--text);}
+.stat .l{font-size:10px;color:var(--dim);letter-spacing:1.5px;margin-top:3px;text-transform:uppercase;}
+
+/* ---------- ELEVATION ---------- */
+.big-elev{text-align:center;margin-top:18px;}
+.big-elev .v{font-size:56px;font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:-1px;color:var(--text);}
+.big-elev .u{font-size:18px;color:var(--dim);margin-left:4px;}
+.big-elev .l{font-size:12px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;margin-top:2px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px;}
+.card{
+  border-radius:18px;padding:14px 16px;
+}
+.card .l{font-size:10px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;}
+.card .v{font-size:20px;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:500;color:var(--text);}
+.card .v.small{font-size:16px;}
+.graph-wrap{margin-top:16px;border-radius:18px;padding:14px 14px 10px;}
+.graph-wrap canvas{width:100%;height:110px;display:block;}
+.graph-label-row{display:flex;justify-content:space-between;margin-top:6px;}
+.graph-label-row span{font-size:10px;color:var(--dimmer);}
+
+/* ---------- LOCATION ---------- */
+.coord-block{text-align:center;margin-top:22px;border-radius:18px;padding:14px 10px;}
+.coord-block .v{font-size:26px;font-weight:300;font-variant-numeric:tabular-nums;color:var(--text);}
+.coord-block .l{font-size:11px;color:var(--dim);letter-spacing:2px;margin-top:4px;text-transform:uppercase;}
+.sun-row{display:flex;justify-content:space-between;margin-top:16px;padding:16px 18px;border-radius:18px;}
+.sun-item{text-align:center;flex:1;}
+.sun-item .v{font-size:20px;font-variant-numeric:tabular-nums;color:var(--text);}
+.sun-item .l{font-size:10px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px;}
+
+/* ---------- LEVEL ---------- */
+#level-screen{align-items:center;justify-content:center;}
+.level-wrap{position:relative;width:270px;height:270px;border-radius:50%;}
+.level-wrap svg{width:100%;height:100%;position:relative;z-index:1;}
+.level-wrap .glass-disc{position:absolute;inset:0;border-radius:50%;}
+.level-readout{text-align:center;margin-top:20px;}
+.level-readout .v{font-size:42px;font-weight:200;font-variant-numeric:tabular-nums;color:var(--text);}
+.level-readout .l{font-size:11px;color:var(--dim);letter-spacing:3px;text-transform:uppercase;margin-top:2px;}
+.level-flat-msg{font-size:12px;color:var(--accent2);letter-spacing:1px;margin-top:8px;height:16px;text-align:center;font-weight:600;}
+
+/* ---------- SETTINGS ---------- */
+.set-group{margin-top:18px;border-radius:18px;padding:6px 12px;}
+.set-group-title{font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;margin:10px 0 8px 4px;}
+.set-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 4px;border-bottom:1px solid rgba(255,255,255,0.5);
+}
+.set-row:last-child{border-bottom:none;}
+.set-row .label{font-size:15px;color:var(--text);}
+.set-row .sub{font-size:12px;color:var(--dim);margin-top:2px;}
+.toggle{
+  width:46px;height:27px;border-radius:14px;background:rgba(255,255,255,0.6);position:relative;flex-shrink:0;
+  border:1px solid var(--glass-line);box-shadow:inset 0 1px 2px rgba(60,120,160,0.2);
+}
+.toggle.on{background:linear-gradient(180deg,#3fc17c,#2a9e64);border-color:#2a9e64;}
+.toggle::after{
+  content:'';position:absolute;top:2px;left:2px;width:23px;height:23px;border-radius:50%;
+  background:#fff;transition:transform .15s ease;box-shadow:0 1px 3px rgba(0,0,0,0.25);
+}
+.toggle.on::after{transform:translateX(19px);}
+.seg{display:flex;background:rgba(255,255,255,0.45);border:1px solid var(--glass-line);border-radius:12px;overflow:hidden;margin-bottom:12px;}
+.seg button{flex:1;padding:10px 0;font-size:13px;color:var(--dim);background:none;border:none;}
+.seg button.on{background:linear-gradient(180deg, #5bb8f2, #2f8fd6);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);}
+.about-line{font-size:11px;color:var(--dimmer);text-align:center;margin-top:26px;letter-spacing:1px;}
+
+/* ---------- NAV ---------- */
+nav{
+  display:flex;padding-bottom:env(safe-area-inset-bottom);
+  margin:0 12px 12px;border-radius:24px;
+  background:var(--glass-strong);
+  backdrop-filter:blur(28px) saturate(180%);
+  -webkit-backdrop-filter:blur(28px) saturate(180%);
+  border:1px solid var(--glass-line);
+  box-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.9),
+    0 10px 30px rgba(60,120,160,0.22);
+  position:relative;z-index:1;
+}
+nav button{
+  flex:1;background:none;border:none;padding:12px 0 8px;color:var(--dimmer);
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+}
+nav button.active{color:#2f8fd6;}
+nav svg{width:22px;height:22px;}
+nav .navlabel{font-size:10px;letter-spacing:0.5px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- COMPASS -->
+  <section class="screen active" id="compass-screen">
+    <div class="topbar">
+      <span class="title">Compass</span>
+      <span class="dim" style="font-size:11px;color:var(--dim)" id="accuracy-tag">&nbsp;</span>
+    </div>
+    <div class="heading-big"><span id="heading-num">--</span><sup>°</sup></div>
+    <div class="heading-label" id="heading-cardinal">-</div>
+
+    <div class="dial-wrap">
+      <div class="glass-disc glass"></div>
+      <div class="needle-tip"></div>
+      <svg viewBox="0 0 300 300" id="dial-svg">
+        <g id="dial-rotate">
+          <circle cx="150" cy="150" r="140" fill="none" stroke="rgba(14,51,80,0.15)" stroke-width="1"/>
+          <g id="ticks"></g>
+          <g id="dial-labels" font-family="-apple-system,sans-serif" text-anchor="middle" font-size="16" fill="#0e3350"></g>
+        </g>
+        <circle cx="150" cy="150" r="4" fill="#ff6f61"/>
+        <circle cx="150" cy="150" r="7" fill="none" stroke="#ff6f61" stroke-width="1" opacity="0.4"/>
+      </svg>
+    </div>
+
+    <div class="mode-row">
+      <div class="mode-pill on" id="mode-magnetic">Magnetic</div>
+      <div class="mode-pill" id="mode-true">True north</div>
+    </div>
+
+    <div class="calib-banner" id="calib-banner">Move phone in a figure-8 to calibrate</div>
+
+    <div class="stat-row glass">
+      <div class="stat"><div class="v" id="stat-tilt">0°</div><div class="l">Tilt</div></div>
+      <div class="stat"><div class="v" id="stat-declination">0°</div><div class="l">Declination</div></div>
+      <div class="stat"><div class="v" id="stat-bearing">--</div><div class="l">Marked bearing</div></div>
+    </div>
+  </section>
+
+  <!-- ELEVATION -->
+  <section class="screen" id="elevation-screen">
+    <div class="topbar">
+      <span class="title">Elevation</span>
+      <button class="unitbtn" id="unit-toggle-elev">M</button>
+    </div>
+    <div class="big-elev">
+      <div><span class="v" id="elev-num">--</span><span class="u" id="elev-unit">m</span></div>
+      <div class="l">Altitude above sea level</div>
+    </div>
+
+    <div class="graph-wrap glass">
+      <canvas id="elev-graph"></canvas>
+      <div class="graph-label-row"><span id="graph-min-t">session start</span><span id="graph-max-t">now</span></div>
+    </div>
+
+    <div class="grid3">
+      <div class="card glass"><div class="l">Gain</div><div class="v small" id="elev-gain">0 m</div></div>
+      <div class="card glass"><div class="l">Max</div><div class="v small" id="elev-max">--</div></div>
+      <div class="card glass"><div class="l">Min</div><div class="v small" id="elev-min">--</div></div>
+    </div>
+    <div class="grid2">
+      <div class="card glass"><div class="l">Vertical speed</div><div class="v" id="elev-vspeed">0.0 m/s</div></div>
+      <div class="card glass"><div class="l">GPS accuracy</div><div class="v" id="elev-accuracy">-- m</div></div>
+    </div>
+  </section>
+
+  <!-- LOCATION -->
+  <section class="screen" id="location-screen">
+    <div class="topbar">
+      <span class="title">Location</span>
+      <button class="unitbtn" id="unit-toggle-loc">KM</button>
+    </div>
+    <div class="coord-block glass">
+      <div class="v" id="loc-lat">--</div>
+      <div class="l">Latitude</div>
+    </div>
+    <div class="coord-block glass" style="margin-top:14px;">
+      <div class="v" id="loc-lon">--</div>
+      <div class="l">Longitude</div>
+    </div>
+
+    <div class="grid2">
+      <div class="card glass"><div class="l">Speed</div><div class="v" id="loc-speed">0.0</div></div>
+      <div class="card glass"><div class="l">Accuracy</div><div class="v" id="loc-accuracy">-- m</div></div>
+    </div>
+
+    <div class="sun-row glass">
+      <div class="sun-item"><div class="v" id="sun-rise">--:--</div><div class="l">Sunrise</div></div>
+      <div class="sun-item"><div class="v" id="sun-set">--:--</div><div class="l">Sunset</div></div>
+    </div>
+  </section>
+
+  <!-- LEVEL -->
+  <section class="screen" id="level-screen">
+    <div class="topbar" style="width:100%;position:absolute;top:0;left:0;padding:14px 20px 0;">
+      <span class="title">Level</span>
+      <span></span>
+    </div>
+    <div class="level-wrap">
+      <div class="glass-disc glass"></div>
+      <svg viewBox="0 0 280 280">
+        <circle cx="140" cy="140" r="130" fill="none" stroke="rgba(14,51,80,0.15)" stroke-width="1"/>
+        <circle cx="140" cy="140" r="90" fill="none" stroke="rgba(14,51,80,0.15)" stroke-width="1"/>
+        <circle cx="140" cy="140" r="50" fill="none" stroke="rgba(14,51,80,0.15)" stroke-width="1"/>
+        <line x1="10" y1="140" x2="270" y2="140" stroke="rgba(14,51,80,0.1)" stroke-width="1"/>
+        <line x1="140" y1="10" x2="140" y2="270" stroke="rgba(14,51,80,0.1)" stroke-width="1"/>
+        <circle cx="140" cy="140" r="50" fill="none" stroke="rgba(14,51,80,0.25)" stroke-width="1" stroke-dasharray="2,4"/>
+        <circle id="level-bubble" cx="140" cy="140" r="16" fill="#ff6f61"/>
+      </svg>
+    </div>
+    <div class="level-readout">
+      <div class="v"><span id="level-pitch">0.0</span>°</div>
+      <div class="l">Pitch / roll: <span id="level-roll">0.0</span>°</div>
+    </div>
+    <div class="level-flat-msg" id="level-flat-msg"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen" id="settings-screen">
+    <div class="topbar"><span class="title">Settings</span><span></span></div>
+
+    <div class="set-group glass">
+      <div class="set-group-title">Units</div>
+      <div class="seg">
+        <button id="seg-metric" class="on">Metric</button>
+        <button id="seg-imperial">Imperial</button>
+      </div>
+    </div>
+
+    <div class="set-group glass">
+      <div class="set-group-title">Compass</div>
+      <div class="set-row">
+        <div><div class="label">Reference north</div><div class="sub">Use true north instead of magnetic</div></div>
+        <div class="toggle" id="toggle-truenorth"></div>
+      </div>
+      <div class="set-row">
+        <div><div class="label">Keep screen on</div><div class="sub">Prevent sleep while app is open</div></div>
+        <div class="toggle" id="toggle-wakelock"></div>
+      </div>
+    </div>
+
+    <div class="set-group glass">
+      <div class="set-group-title">Session</div>
+      <div class="seg">
+        <button id="btn-reset-session" style="color:var(--accent);font-weight:600;">Reset now</button>
+      </div>
+    </div>
+
+    <div class="about-line">Compass EDC &middot; sensors: orientation, GPS, motion</div>
+  </section>
+
+  <nav>
+    <button class="active" data-screen="compass-screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M15 9l-2 5-5 2 2-5 5-2z" fill="currentColor" stroke="none" fill-opacity="0.9"/></svg>
+      <span class="navlabel">Compass</span>
+    </button>
+    <button data-screen="elevation-screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 18l5-9 4 6 3-5 6 8H3z"/></svg>
+      <span class="navlabel">Elevation</span>
+    </button>
+    <button data-screen="location-screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.3"/></svg>
+      <span class="navlabel">Location</span>
+    </button>
+    <button data-screen="level-screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="10" width="19" height="4" rx="2"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
+      <span class="navlabel">Level</span>
+    </button>
+    <button data-screen="settings-screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.4-2.3.9a8 8 0 00-1.7-1L15 3.5h-4l-.4 2.5a8 8 0 00-1.7 1l-2.3-.9-2 3.4L6.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.4 2.3-.9a8 8 0 001.7 1L11 20.5h4l.4-2.5a8 8 0 001.7-1l2.3.9 2-3.4L19.4 13z"/></svg>
+      <span class="navlabel">Settings</span>
+    </button>
+  </nav>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

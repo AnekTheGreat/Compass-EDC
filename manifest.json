@@ -1,0 +1,16 @@
+{
+  "name": "Compass EDC",
+  "short_name": "Compass EDC",
+  "description": "Compass, elevation, level, and location instrument for everyday carry",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#a9d8f7",
+  "theme_color": "#a9d8f7",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
