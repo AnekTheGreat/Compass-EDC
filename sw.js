@@ -1,4 +1,4 @@
-var CACHE = 'compass-edc-v1';
+var CACHE = 'compass-edc-v2';
 var ASSETS = [
   './index.html',
   './app.js',
@@ -8,16 +8,22 @@ var ASSETS = [
 ];
 
 self.addEventListener('install', function(e){
-  e.waitUntil(caches.open(CACHE).then(function(cache){
-    return cache.addAll(ASSETS);
-  }));
+  e.waitUntil(
+    caches.open(CACHE).then(function(cache){
+      return cache.addAll(ASSETS);
+    })
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(e){
-  e.waitUntil(caches.keys().then(function(keys){
-    return Promise.all(keys.filter(function(k){ return k !== CACHE; }).map(function(k){ return caches.delete(k); }));
-  }));
+  e.waitUntil(
+    caches.keys().then(function(keys){
+      return Promise.all(
+        keys.filter(function(k){ return k !== CACHE; }).map(function(k){ return caches.delete(k); })
+      );
+    })
+  );
   self.clients.claim();
 });
 
