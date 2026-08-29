@@ -1,4 +1,4 @@
-var CACHE = 'compass-edc-v4';
+var CACHE = 'measuret-v1';
 var ASSETS = [
   './index.html',
   './app.js',

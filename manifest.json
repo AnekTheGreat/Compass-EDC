@@ -1,7 +1,7 @@
 {
-  "name": "Compass EDC",
-  "short_name": "Compass EDC",
-  "description": "Compass, elevation, level, and location instrument for everyday carry",
+  "name": "MeasureT",
+  "short_name": "MeasureT",
+  "description": "Measure, convert, and navigate — a compass, level, elevation, and unit-tool kit on your phone",
   "id": "https://anekthegreat.github.io/Compass-EDC/",
   "scope": "./",
   "start_url": "./index.html",

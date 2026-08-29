@@ -386,7 +386,7 @@ var needsPermission = typeof DeviceOrientationEvent !== 'undefined' &&
 if (needsPermission) {
   var overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(180deg,#cdeaff,#8fc7ee);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;padding:24px;text-align:center;';
-  overlay.innerHTML = '<div style="font-size:15px;color:#0e3350;margin-bottom:18px;line-height:1.5;">Compass EDC needs access to<br>motion and orientation sensors</div><button id="grant-btn" style="background:linear-gradient(180deg,#5bb8f2,#2f8fd6);color:#fff;border:1px solid #2f8fd6;padding:14px 28px;border-radius:24px;font-size:14px;box-shadow:0 6px 16px rgba(47,143,214,0.35);">Enable sensors</button>';
+  overlay.innerHTML = '<div style="font-size:15px;color:#0e3350;margin-bottom:18px;line-height:1.5;">MeasureT needs access to<br>motion and orientation sensors</div><button id="grant-btn" style="background:linear-gradient(180deg,#5bb8f2,#2f8fd6);color:#fff;border:1px solid #2f8fd6;padding:14px 28px;border-radius:24px;font-size:14px;box-shadow:0 6px 16px rgba(47,143,214,0.35);">Enable sensors</button>';
   document.body.appendChild(overlay);
   $('grant-btn').addEventListener('click', function(){
     DeviceOrientationEvent.requestPermission().then(function(res){
