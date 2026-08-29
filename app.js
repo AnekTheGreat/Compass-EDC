@@ -2,8 +2,8 @@
 'use strict';
 
 // ---------- STATE ----------
-var SMOOTH = 0.12;   // EMA alpha — lower = smoother (0.12 ≈ 80 ms time-constant)
-var DEAD_ZONE = 0.8; // ignore changes smaller than this (degrees)
+var SMOOTH = 0.09;   // EMA alpha — lower = smoother (0.09 ≈ 110 ms time-constant)
+var DEAD_ZONE = 1.5; // hold the dial still unless the reading moves more than this (degrees)
 var rawHeading = null;
 var smoothHeading = null;
 var smoothPitch = 0, smoothRoll = 0;
@@ -163,11 +163,11 @@ function handleOrientation(e){
   rawHeading = (heading + 360) % 360;
   state.heading = rawHeading;
 
-  // EMA smoothing with angular-wrap handling
-  smoothHeading = lerpAngle(smoothHeading, rawHeading, SMOOTH);
-  // dead zone: snap when difference is tiny to prevent micro-jitter
-  if (smoothHeading != null && Math.abs(angleDiff(rawHeading, smoothHeading)) < DEAD_ZONE) {
-    smoothHeading = rawHeading;
+  // TRUE dead zone: if the raw reading is essentially where the dial
+  // already points, do NOTHING — hold it perfectly still. Only follow the
+  // sensor once it moves beyond the dead zone, then ease toward it.
+  if (smoothHeading == null || Math.abs(angleDiff(rawHeading, smoothHeading)) >= DEAD_ZONE) {
+    smoothHeading = lerpAngle(smoothHeading, rawHeading, SMOOTH);
   }
 
   state.tilt = e.beta != null ? Math.abs(e.beta) : 0;
