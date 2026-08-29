@@ -819,6 +819,14 @@ $('ar-mode-base').addEventListener('click', function(){ setARMode('base'); });
 $('ar-mode-height').addEventListener('click', function(){ setARMode('height'); });
 $('ar-mode-person').addEventListener('click', function(){ setARMode('person'); });
 
+// Quick button on the Compass screen -> jump straight into person-height AR
+$('btn-hh-quick').addEventListener('click', function(){
+  document.querySelector('nav button[data-screen="convert-screen"]').click();
+  setCovMode('measure');
+  setARMode('person');
+  if (!arActive) startAR();
+});
+
 buildCovChips();
 fillCovSelects();
 updateCovResult();
