@@ -667,16 +667,22 @@ window.__arBeta = null;
 window.__arBetaRaw = null;
 var arHeight = parseFloat(localStorage.getItem('cedc_arheight')) || 1.6;
 $('ar-height').value = arHeight;
+$('ar-person-height').value = arHeight;
 var arObjHeight = parseFloat(localStorage.getItem('cedc_arobjheight')) || 2;
 $('ar-obj-height').value = arObjHeight;
-var arBaseAngle = null, arTopAngle = null;
-$('ar-height').addEventListener('input', function(){
-  var v = parseFloat(this.value);
+var arBaseAngle = null, arTopAngle = null, arFeetAngle = null, arHeadAngle = null;
+function setArPhoneHeight(v){
   if (isNaN(v) || v < 0.3 || v > 3) v = 1.6;
   arHeight = v;
   localStorage.setItem('cedc_arheight', String(arHeight));
+  // keep the two phone-height inputs in sync
+  if ($('ar-height').value !== String(arHeight)) $('ar-height').value = arHeight;
+  if ($('ar-person-height').value !== String(arHeight)) $('ar-person-height').value = arHeight;
   arReport();
-});
+  arReportPerson();
+}
+$('ar-height').addEventListener('input', function(){ setArPhoneHeight(parseFloat(this.value)); });
+$('ar-person-height').addEventListener('input', function(){ setArPhoneHeight(parseFloat(this.value)); });
 window.addEventListener('deviceorientation', function(e){
   if (arActive && e.beta != null){ window.__arBetaRaw = e.beta; window.__arBeta = Math.abs(e.beta); }
 });
@@ -695,6 +701,27 @@ function arReportHeight(){
   }
   $('ar-height-dist').textContent = formatDistance(arObjHeight / denom);
 }
+function formatHeight(m){
+  if (m == null || !isFinite(m) || m <= 0) return '--';
+  if (state.unitSystem === 'imperial'){
+    var ft = m * 3.28084;
+    var f = Math.floor(ft);
+    var inch = Math.round((ft - f) * 12);
+    if (inch >= 12){ f += 1; inch -= 12; }
+    return f + "'" + (inch ? " " + inch + '"' : '') + ' (' + ft.toFixed(1) + ' ft)';
+  }
+  return m.toFixed(2) + ' m (' + (m * 100).toFixed(0) + ' cm)';
+}
+function arReportPerson(){
+  if (!arActive){ $('ar-person-dist').textContent = '--'; return; }
+  if (arFeetAngle == null || arHeadAngle == null){ $('ar-person-dist').textContent = '--'; return; }
+  var down = Math.abs(arFeetAngle); // degrees below horizontal to their feet
+  down = Math.max(3, Math.min(87, down));
+  var d = arHeight / Math.tan(down * Math.PI / 180); // ground distance to them
+  var h = arHeight + d * Math.tan(arHeadAngle * Math.PI / 180); // signed head angle above horizontal
+  if (h <= 0.05 || !isFinite(h)){ $('ar-person-dist').textContent = 'Check angles'; return; }
+  $('ar-person-dist').textContent = formatHeight(h);
+}
 function setARStatus(t){ $('ar-status').textContent = t || ''; }
 function arReport(){
   if (!arActive) return;
@@ -704,17 +731,21 @@ function arReport(){
   theta = Math.max(3, Math.min(87, theta));
   var m = arHeight / Math.tan(theta * Math.PI / 180);
   $('ar-dist').textContent = formatDistance(m);
+  arReportPerson();
 }
 function stopAR(){
   arActive = false;
   if (arTimer){ clearInterval(arTimer); arTimer = null; }
   if (arStream){ arStream.getTracks().forEach(function(t){ t.stop(); }); arStream = null; }
   if ($('ar-video').srcObject){ $('ar-video').srcObject = null; }
-  arBaseAngle = null; arTopAngle = null;
+  arBaseAngle = null; arTopAngle = null; arFeetAngle = null; arHeadAngle = null;
   $('btn-ar-toggle').textContent = 'Start camera';
   setARStatus('');
   $('ar-dist').textContent = '--';
   $('ar-height-dist').textContent = '--';
+  $('ar-person-dist').textContent = '--';
+  $('ar-height-status').textContent = 'Align the crosshair with the BASE of the object and tap “Mark base”, then align with the TOP and tap “Mark top”. Enter the object’s real height (a standard door is about 2 m).';
+  $('ar-person-status').textContent = 'Aim the crosshair at the person\u2019s FEET on the ground and tap “Mark feet”, then aim at the very TOP of their head and tap “Mark head”.';
 }
 function startAR(){
   if (state.lat == null) setARStatus('GPS not ready yet — the estimate is more accurate once a fix is found.');
@@ -753,14 +784,31 @@ $('ar-mark-top').addEventListener('click', function(){
   arTopAngle = d;
   arReportHeight();
 });
-$('ar-mode-base').addEventListener('click', function(){
-  $('ar-mode-base').classList.add('on'); $('ar-mode-height').classList.remove('on');
-  $('ar-base-view').style.display = ''; $('ar-height-view').style.display = 'none';
+$('ar-mark-feet').addEventListener('click', function(){
+  var d = arAimDelta();
+  if (d == null){ $('ar-person-status').textContent = 'Aim the crosshair at the person\u2019s feet on the ground first.'; return; }
+  arFeetAngle = d;
+  $('ar-person-status').textContent = 'Feet captured (' + Math.round(Math.abs(d)) + '° below horizontal). Now aim at the very TOP of their head and tap “Mark head”.';
+  arReportPerson();
 });
-$('ar-mode-height').addEventListener('click', function(){
-  $('ar-mode-height').classList.add('on'); $('ar-mode-base').classList.remove('on');
-  $('ar-base-view').style.display = 'none'; $('ar-height-view').style.display = '';
+$('ar-mark-head').addEventListener('click', function(){
+  var d = arAimDelta();
+  if (d == null || arFeetAngle == null){ $('ar-person-status').textContent = 'Mark the feet first, then the head.'; return; }
+  arHeadAngle = d;
+  arReportPerson();
 });
+function setARMode(m){
+  var toBase = m === 'base', toHeight = m === 'height', toPerson = m === 'person';
+  $('ar-mode-base').classList.toggle('on', toBase);
+  $('ar-mode-height').classList.toggle('on', toHeight);
+  $('ar-mode-person').classList.toggle('on', toPerson);
+  $('ar-base-view').style.display = toBase ? '' : 'none';
+  $('ar-height-view').style.display = toHeight ? '' : 'none';
+  $('ar-person-view').style.display = toPerson ? '' : 'none';
+}
+$('ar-mode-base').addEventListener('click', function(){ setARMode('base'); });
+$('ar-mode-height').addEventListener('click', function(){ setARMode('height'); });
+$('ar-mode-person').addEventListener('click', function(){ setARMode('person'); });
 
 buildCovChips();
 fillCovSelects();
