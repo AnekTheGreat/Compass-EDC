@@ -188,6 +188,34 @@ body::before{
 .seg button.on{background:linear-gradient(180deg, #5bb8f2, #2f8fd6);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,0.4);}
 .about-line{font-size:11px;color:var(--dimmer);text-align:center;margin-top:26px;letter-spacing:1px;}
 
+/* ---------- TOOLS / CONVERT ---------- */
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+.cov-chip{font-size:11px;letter-spacing:1px;color:var(--dim);border:1px solid var(--glass-line);padding:7px 13px;border-radius:18px;text-transform:uppercase;background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.8);}
+.cov-chip.on{color:#fff;background:linear-gradient(180deg,#5bb8f2,#2f8fd6);border-color:#2f8fd6;}
+.cov-inputrow{display:flex;align-items:center;gap:10px;}
+#cov-value{flex:1;min-width:0;font-size:30px;font-weight:200;color:var(--text);background:none;border:none;outline:none;border-bottom:1px solid var(--glass-line);padding:6px 2px;font-variant-numeric:tabular-nums;user-select:text;-webkit-user-select:text;}
+.cov-swap{background:var(--glass);border:1px solid var(--glass-line);border-radius:12px;color:var(--dim);font-size:16px;width:46px;height:46px;flex-shrink:0;}
+.cov-unitsrow{display:flex;align-items:center;gap:8px;margin-top:14px;}
+.cov-unitsrow select{flex:1;min-width:0;padding:11px 8px;border-radius:13px;background:rgba(255,255,255,0.55);border:1px solid var(--glass-line);font-size:15px;color:var(--text);}
+.cov-arrow{color:var(--dimmer);font-size:13px;flex-shrink:0;letter-spacing:3px;}
+.cov-resultrow{margin-top:18px;text-align:center;}
+.cov-result{font-size:36px;font-weight:200;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.5px;}
+.cov-method{font-size:14px;color:var(--text);margin-top:10px;line-height:1.5;}
+.cov-equation{font-size:13px;color:var(--dim);margin-top:8px;font-variant-numeric:tabular-nums;}
+.cov-actions{display:flex;gap:10px;margin-top:16px;}
+.cov-action{flex:1;padding:14px 0;border:none;border-radius:15px;font-size:13px;letter-spacing:1px;color:var(--dim);background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.8);}
+.cov-action.primary{color:#fff;background:linear-gradient(180deg,#5bb8f2,#2f8fd6);border-color:#2f8fd6;box-shadow:inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px rgba(47,143,214,0.3);}
+.ar-view{position:relative;border-radius:14px;overflow:hidden;background:#08222e;aspect-ratio:3/4;}
+#ar-video{width:100%;height:100%;object-fit:cover;display:block;}
+.ar-crosshair{position:absolute;inset:0;pointer-events:none;}
+.ar-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:0;height:0;}
+.ar-center .dot{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px rgba(255,255,255,0.75);}
+.ar-center .h{position:absolute;left:-34px;top:-1px;width:68px;height:2px;background:rgba(255,255,255,0.85);}
+.ar-center .v{position:absolute;left:-1px;top:-34px;width:2px;height:68px;background:rgba(255,255,255,0.85);}
+.ar-center .lbl{position:absolute;left:-26px;top:8px;width:52px;text-align:center;font-size:9px;letter-spacing:1px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.6);}
+.btn-ar-overlay{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);padding:10px 22px;border:none;border-radius:22px;font-size:13px;letter-spacing:1px;color:#fff;background:rgba(20,40,55,0.78);border:1px solid rgba(255,255,255,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+#ar-status{font-size:11px;color:var(--amber);margin-top:8px;line-height:1.5;}
+
 /* ---------- NAV ---------- */
 nav{
   display:flex;padding-bottom:env(safe-area-inset-bottom);
@@ -328,6 +356,82 @@ nav .navlabel{font-size:10px;letter-spacing:0.5px;}
     <div class="level-flat-msg" id="level-flat-msg"></div>
   </section>
 
+  <!-- TOOLS / CONVERT -->
+  <section class="screen" id="convert-screen">
+    <div class="topbar"><span class="title">Convert</span><span></span></div>
+
+    <div class="seg" style="margin-top:6px;">
+      <button id="cov-mode-convert" class="on">Convert</button>
+      <button id="cov-mode-measure">Measure</button>
+    </div>
+
+    <div id="cov-convert-view">
+      <div class="chip-row" id="cov-cats"></div>
+
+      <div class="card glass" style="margin-top:16px;">
+        <div class="cov-inputrow">
+          <input id="cov-value" type="number" inputmode="decimal" placeholder="Enter value" value="1">
+          <button class="cov-swap" id="cov-swap" title="Swap units">&#8645;</button>
+        </div>
+        <div class="cov-unitsrow">
+          <select id="cov-from"></select>
+          <span class="cov-arrow">&#8594;</span>
+          <select id="cov-to"></select>
+        </div>
+        <div class="cov-resultrow">
+          <div class="cov-result" id="cov-result">--</div>
+        </div>
+      </div>
+
+      <div class="card glass" style="margin-top:12px;">
+        <div class="l">How to convert</div>
+        <div class="cov-method" id="cov-method-text">Pick two units to see the method.</div>
+        <div class="cov-equation" id="cov-equation"></div>
+      </div>
+    </div>
+
+    <div id="cov-measure-view" style="display:none;">
+      <div class="big-elev">
+        <div><span class="v" id="cov-meas-dist">0 m</span></div>
+        <div class="l">Distance measured</div>
+      </div>
+
+      <div class="cov-actions">
+        <button class="cov-action primary" id="btn-measure-toggle">Start</button>
+        <button class="cov-action" id="btn-measure-mark">Drop pin</button>
+        <button class="cov-action" id="btn-measure-reset">Reset</button>
+      </div>
+
+      <div class="card glass" style="margin-top:16px;">
+        <div class="l">Distance to pin</div>
+        <div class="cov-result" style="font-size:26px;margin-top:6px;" id="cov-meas-wpt-dist">--</div>
+        <div class="l" style="margin-top:12px;">Bearing to pin</div>
+        <div class="cov-result" style="font-size:26px;margin-top:6px;" id="cov-meas-wpt-brng">--</div>
+      </div>
+
+      <div class="card glass" style="margin-top:12px;font-size:12px;line-height:1.6;color:var(--dim);">
+        Start measuring, then drop a pin at a landmark. The app tracks how far you've traveled and shows the straight-line distance &amp; bearing to your pin — perfect for estimating how far away things are.
+      </div>
+
+      <div class="card glass" style="margin-top:14px;">
+        <div class="l">AR distance — camera</div>
+        <div class="ar-view" style="margin-top:10px;">
+          <video id="ar-video" playsinline muted autoplay></video>
+          <div class="ar-crosshair"><div class="ar-center"><span class="h"></span><span class="v"></span><span class="dot"></span><span class="lbl">Base</span></div></div>
+          <button class="btn-ar-overlay" id="btn-ar-toggle">Start camera</button>
+        </div>
+        <div id="ar-status"></div>
+        <div class="l" style="margin-top:12px;">Distance to target</div>
+        <div class="cov-result" style="font-size:28px;margin-top:4px;" id="ar-dist">--</div>
+        <div class="cov-inputrow" style="margin-top:12px;">
+          <span style="font-size:12px;color:var(--dim);white-space:nowrap;">Eve / phone height (m)</span>
+          <input id="ar-height" type="number" step="0.05" min="0.5" max="3" value="1.6">
+        </div>
+        <div style="font-size:11px;color:var(--dimmer);margin-top:8px;line-height:1.5;">Line the crosshair up with the base of the object where it meets the ground, keep your phone tilted down, and hold steady. Distance is estimated as height &divide; tan(aim angle) — approximate, works best outdoors with GPS accuracy reachable.
+      </div>
+    </div>
+  </section>
+
   <!-- SETTINGS -->
   <section class="screen" id="settings-screen">
     <div class="topbar"><span class="title">Settings</span><span></span></div>
@@ -378,6 +482,10 @@ nav .navlabel{font-size:10px;letter-spacing:0.5px;}
     <button data-screen="level-screen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="10" width="19" height="4" rx="2"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
       <span class="navlabel">Level</span>
+    </button>
+    <button data-screen="convert-screen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 5L4 8l3 3M4 8h13M17 19l3-3-3-3M20 16H7"/></svg>
+      <span class="navlabel">Convert</span>
     </button>
     <button data-screen="settings-screen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.9 7.9 0 000-2l2-1.5-2-3.4-2.3.9a8 8 0 00-1.7-1L15 3.5h-4l-.4 2.5a8 8 0 00-1.7 1l-2.3-.9-2 3.4L6.6 11a7.9 7.9 0 000 2l-2 1.5 2 3.4 2.3-.9a8 8 0 001.7 1L11 20.5h4l.4-2.5a8 8 0 001.7-1l2.3.9 2-3.4L19.4 13z"/></svg>

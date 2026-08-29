@@ -366,6 +366,8 @@ if ('geolocation' in navigator) {
       ingestAltitude(pos.coords.altitude, pos.coords.altitudeAccuracy);
     }
     updateLocationUI();
+    sampleMeasure();
+    updateMeasureUI();
   }, function(err){
     $('loc-lat').textContent = 'No access';
     $('elev-num').textContent = 'No access';
@@ -468,6 +470,252 @@ if (state.useTrueNorth) {
 }
 applyUnitSystem();
 applyWakeLock();
+
+// ---------- TOOLS: CONVERTER + MEASURER ----------
+var UNIT_SHORT = {mm:'mm',cm:'cm',m:'m',km:'km',ft:'ft',yd:'yd',in:'in',mi:'mi',mg:'mg',g:'g',kg:'kg',oz:'oz',lb:'lb',st:'st',C:'°C',F:'°F',K:'K',mps:'m/s',kmh:'km/h',mph:'mph',fps:'ft/s',kt:'kn',ml:'mL',l:'L',cup:'cup',floz:'fl oz',pt:'pt',qt:'qt',gal:'gal',m2:'m²',km2:'km²',ft2:'ft²',ac:'ac',mi2:'mi²',ha:'ha'};
+
+var CONVERTERS = {
+  length:{units:[['mm','Millimeters',0.001],['cm','Centimeters',0.01],['m','Meters',1],['km','Kilometers',1000],['in','Inches',0.0254],['ft','Feet',0.3048],['yd','Yards',0.9144],['mi','Miles',1609.344]]},
+  mass:{units:[['mg','Milligrams',0.001],['g','Grams',1],['kg','Kilograms',1000],['oz','Ounces',28.349523],['lb','Pounds',453.59237],['st','Stones',6350.293]]},
+  temperature:{special:true,units:[['C','Celsius'],['F','Fahrenheit'],['K','Kelvin']]},
+  speed:{units:[['mps','m/s',1],['kmh','km/h',0.277778],['mph','mph',0.44704],['fps','ft/s',0.3048],['kt','Knots',0.514444]]},
+  volume:{units:[['ml','Milliliters',0.001],['l','Liters',1],['cup','Cups (US)',0.24],['floz','Fl oz (US)',0.0295735],['pt','Pints (US)',0.473176],['qt','Quarts (US)',0.946353],['gal','Gallons (US)',3.78541]]},
+  area:{units:[['m2','Sq meters',1],['km2','Sq km',1000000],['ft2','Sq feet',0.092903],['ac','Acres',4046.856],['ha','Hectares',10000],['mi2','Sq miles',2589988.11]]}
+};
+var CAT_LABEL = {length:'Length',mass:'Mass',temperature:'Temp',speed:'Speed',volume:'Volume',area:'Area'};
+var tempMethod = {'CF':'Multiply °C by 9/5, then add 32','FC':'Subtract 32 from °F, then multiply by 5/9','CK':'Add 273.15 to °C','KC':'Subtract 273.15 from °K','FK':'Subtract 32 from °F, multiply by 5/9, then add 273.15','KF':'Subtract 273.15 from °K, multiply by 9/5, then add 32'};
+var tempFormulaShort = {'CF':'(°C × 9/5) + 32','FC':'(°F − 32) × 5/9','CK':'°C + 273.15','KC':'°K − 273.15','FK':'(°F − 32) × 5/9 + 273.15','KF':'(°K − 273.15) × 9/5 + 32'};
+
+var covCat = 'length';
+var measureActive = false, measureDist = 0, lastSample = null, wptLat = null, wptLon = null;
+
+function unitFind(cat, code){
+  var arr = CONVERTERS[cat].units;
+  for (var i = 0; i < arr.length; i++){ if (arr[i][0] === code) return arr[i]; }
+  return null;
+}
+function numFmt(n){
+  if (!isFinite(n)) return '';
+  if (n === 0) return '0';
+  var s = n.toFixed(6).replace(/\.?0+$/,'');
+  return s === '' || s === '-' ? '0' : s;
+}
+function resultFmt(n){
+  if (!isFinite(n)) return '--';
+  var abs = Math.abs(n), s;
+  if (abs >= 100000) s = n.toFixed(0);
+  else if (abs >= 100) s = n.toFixed(1);
+  else if (abs >= 1) s = n.toFixed(2);
+  else if (abs >= 0.01) s = n.toFixed(3);
+  else if (abs >= 0.0001) s = n.toFixed(5);
+  else s = n.toExponential(2);
+  return s.replace(/\.?0+$/,'');
+}
+function toKelvin(v, u){ if (u === 'C') return v + 273.15; if (u === 'F') return (v - 32) * 5/9 + 273.15; return v; }
+function fromKelvin(k, u){ if (u === 'C') return k - 273.15; if (u === 'F') return (k - 273.15) * 9/5 + 32; return k; }
+
+function convertValue(cat, v, from, to){
+  if (CONVERTERS[cat].special) return fromKelvin(toKelvin(v, from), to);
+  return v * unitFind(cat, from)[2] / unitFind(cat, to)[2];
+}
+
+function fillCovSelects(){
+  function fill(id, cat){
+    var sel = $(id), opts = CONVERTERS[cat].units;
+    sel.innerHTML = '';
+    opts.forEach(function(u){
+      var o = document.createElement('option');
+      o.value = u[0]; o.textContent = u[1];
+      sel.appendChild(o);
+    });
+  }
+  fill('cov-from', covCat);
+  fill('cov-to', covCat);
+  setCovDefaults(covCat);
+}
+function setCovDefaults(cat){
+  var f = $('cov-from'), t = $('cov-to');
+  if (cat === 'length'){ f.value = state.unitSystem === 'imperial' ? 'ft' : 'm'; t.value = state.unitSystem === 'imperial' ? 'm' : 'ft'; }
+  else if (cat === 'mass'){ f.value = 'kg'; t.value = 'lb'; }
+  else if (cat === 'temperature'){ f.value = 'C'; t.value = 'F'; }
+  else if (cat === 'speed'){ f.value = state.unitSystem === 'imperial' ? 'mph' : 'kmh'; t.value = state.unitSystem === 'imperial' ? 'kmh' : 'mph'; }
+  else if (cat === 'volume'){ f.value = 'l'; t.value = 'gal'; }
+  else if (cat === 'area'){ f.value = 'm2'; t.value = 'ft2'; }
+}
+function setCovCat(cat){
+  covCat = cat;
+  document.querySelectorAll('.cov-chip').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-cat') === cat); });
+  fillCovSelects();
+  updateCovResult();
+}
+function buildCovChips(){
+  var row = $('cov-cats');
+  row.innerHTML = '';
+  Object.keys(CONVERTERS).forEach(function(k){
+    var b = document.createElement('button');
+    b.className = 'cov-chip' + (k === covCat ? ' on' : '');
+    b.setAttribute('data-cat', k);
+    b.textContent = CAT_LABEL[k];
+    b.addEventListener('click', function(){ setCovCat(k); });
+    row.appendChild(b);
+  });
+}
+function getCovMethod(cat, from, to){
+  if (CONVERTERS[cat].special) return 'To convert: ' + (tempMethod[from + to] || '');
+  var factor = unitFind(cat, from)[2] / unitFind(cat, to)[2];
+  return 'Multiply ' + UNIT_SHORT[from] + ' by ' + numFmt(factor) + ' to get ' + UNIT_SHORT[to] + '. Reverse: divide by ' + numFmt(factor) + '.';
+}
+function getCovEquation(cat, from, to){
+  if (CONVERTERS[cat].special) return tempFormulaShort[from + to] || '';
+  var factor = unitFind(cat, from)[2] / unitFind(cat, to)[2];
+  return '1 ' + UNIT_SHORT[from] + ' = ' + numFmt(factor) + ' ' + UNIT_SHORT[to];
+}
+function updateCovResult(){
+  var from = $('cov-from').value, to = $('cov-to').value;
+  var v = parseFloat($('cov-value').value);
+  $('cov-equation').textContent = getCovEquation(covCat, from, to);
+  $('cov-method-text').textContent = getCovMethod(covCat, from, to);
+  if (isNaN(v)){ $('cov-result').textContent = '--'; return; }
+  $('cov-result').textContent = resultFmt(convertValue(covCat, v, from, to)) + ' ' + UNIT_SHORT[to];
+}
+
+function haversine(lat1, lon1, lat2, lon2){
+  var R = 6371000;
+  var dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+function bearing(lat1, lon1, lat2, lon2){
+  var dLon = (lon2 - lon1) * Math.PI / 180;
+  var y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+  var x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) - Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+  var brng = Math.atan2(y, x) * 180 / Math.PI;
+  return (brng + 360) % 360;
+}
+function formatDistance(m){
+  if (state.unitSystem === 'imperial'){
+    var ft = m * 3.28084;
+    return ft < 3281 ? ft.toFixed(0) + ' ft' : (ft/5280).toFixed(2) + ' mi';
+  }
+  return m < 1000 ? m.toFixed(0) + ' m' : (m/1000).toFixed(2) + ' km';
+}
+function sampleMeasure(){
+  if (!measureActive || state.lat == null || state.lon == null) return;
+  if (lastSample){
+    var d = haversine(lastSample[0], lastSample[1], state.lat, state.lon);
+    if (d > 0.5 && d < 100){ measureDist += d; } // filter GPS noise & dropouts
+  }
+  lastSample = [state.lat, state.lon];
+  updateMeasureUI();
+}
+function updateMeasureUI(){
+  $('cov-meas-dist').textContent = formatDistance(measureDist);
+  if (wptLat != null && state.lat != null){
+    $('cov-meas-wpt-dist').textContent = formatDistance(haversine(state.lat, state.lon, wptLat, wptLon));
+    $('cov-meas-wpt-brng').textContent = Math.round(bearing(state.lat, state.lon, wptLat, wptLon)) + '°';
+  } else {
+    $('cov-meas-wpt-dist').textContent = '--';
+    $('cov-meas-wpt-brng').textContent = '--';
+  }
+}
+function toggleMeasure(){
+  measureActive = !measureActive;
+  if (measureActive){ measureDist = 0; lastSample = null; }
+  $('btn-measure-toggle').textContent = measureActive ? 'Stop' : 'Start';
+  $('btn-measure-toggle').classList.toggle('primary', measureActive);
+  updateMeasureUI();
+}
+function markWaypoint(){
+  if (state.lat == null){ return; }
+  wptLat = state.lat; wptLon = state.lon;
+  updateMeasureUI();
+}
+function resetMeasure(){
+  measureActive = false; measureDist = 0; lastSample = null; wptLat = null; wptLon = null;
+  $('btn-measure-toggle').textContent = 'Start';
+  $('btn-measure-toggle').classList.remove('primary');
+  updateMeasureUI();
+}
+
+function setCovMode(m){
+  var isC = m === 'convert';
+  $('cov-mode-convert').classList.toggle('on', isC);
+  $('cov-mode-measure').classList.toggle('on', !isC);
+  $('cov-convert-view').style.display = isC ? '' : 'none';
+  $('cov-measure-view').style.display = isC ? 'none' : '';
+}
+
+$('cov-mode-convert').addEventListener('click', function(){ setCovMode('convert'); });
+$('cov-mode-measure').addEventListener('click', function(){ setCovMode('measure'); });
+$('cov-value').addEventListener('input', updateCovResult);
+$('cov-from').addEventListener('change', updateCovResult);
+$('cov-to').addEventListener('change', updateCovResult);
+$('cov-swap').addEventListener('click', function(){
+  var f = $('cov-from').value;
+  $('cov-from').value = $('cov-to').value;
+  $('cov-to').value = f;
+  updateCovResult();
+});
+$('btn-measure-toggle').addEventListener('click', toggleMeasure);
+$('btn-measure-mark').addEventListener('click', markWaypoint);
+$('btn-measure-reset').addEventListener('click', resetMeasure);
+
+// AR distance (tilt-based ranging via camera viewfinder)
+var arActive = false, arStream = null, arTimer = null;
+window.__arBeta = null;
+var arHeight = parseFloat(localStorage.getItem('cedc_arheight')) || 1.6;
+$('ar-height').value = arHeight;
+$('ar-height').addEventListener('input', function(){
+  var v = parseFloat(this.value);
+  if (isNaN(v) || v < 0.3 || v > 3) v = 1.6;
+  arHeight = v;
+  localStorage.setItem('cedc_arheight', String(arHeight));
+  arReport();
+});
+window.addEventListener('deviceorientation', function(e){
+  if (arActive && e.beta != null) window.__arBeta = Math.abs(e.beta);
+});
+function setARStatus(t){ $('ar-status').textContent = t || ''; }
+function arReport(){
+  if (!arActive) return;
+  if (window.__arBeta == null){ $('ar-dist').textContent = 'Hold steady &amp; aim downward'; return; }
+  var theta = 90 - window.__arBeta; // degrees below horizontal
+  theta = Math.abs(theta);
+  theta = Math.max(3, Math.min(87, theta));
+  var m = arHeight / Math.tan(theta * Math.PI / 180);
+  $('ar-dist').textContent = formatDistance(m);
+}
+function stopAR(){
+  arActive = false;
+  if (arTimer){ clearInterval(arTimer); arTimer = null; }
+  if (arStream){ arStream.getTracks().forEach(function(t){ t.stop(); }); arStream = null; }
+  if ($('ar-video').srcObject){ $('ar-video').srcObject = null; }
+  $('btn-ar-toggle').textContent = 'Start camera';
+  setARStatus('');
+  $('ar-dist').textContent = '--';
+}
+function startAR(){
+  if (state.lat == null) setARStatus('GPS not ready yet — the estimate is more accurate once a fix is found.');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ setARStatus('Camera not supported on this device.'); return; }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment', width:{ideal:1280}, height:{ideal:960}}}).then(function(stream){
+    arStream = stream; arActive = true;
+    var v = $('ar-video');
+    v.srcObject = stream;
+    v.play().catch(function(){});
+    $('btn-ar-toggle').textContent = 'Stop';
+    setARStatus('');
+    window.__arBeta = null;
+    arTimer = setInterval(arReport, 120);
+  }).catch(function(err){
+    setARStatus('Could not access camera: ' + err.message);
+  });
+}
+$('btn-ar-toggle').addEventListener('click', function(){ arActive ? stopAR() : startAR(); });
+
+buildCovChips();
+fillCovSelects();
+updateCovResult();
 
 // periodic redraw for graph resize
 window.addEventListener('resize', drawElevGraph);
