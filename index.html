@@ -421,14 +421,37 @@ nav .navlabel{font-size:10px;letter-spacing:0.5px;}
           <button class="btn-ar-overlay" id="btn-ar-toggle">Start camera</button>
         </div>
         <div id="ar-status"></div>
-        <div class="l" style="margin-top:12px;">Distance to target</div>
-        <div class="cov-result" style="font-size:28px;margin-top:4px;" id="ar-dist">--</div>
-        <div class="cov-inputrow" style="margin-top:12px;">
-          <span style="font-size:12px;color:var(--dim);white-space:nowrap;">Eve / phone height (m)</span>
-          <input id="ar-height" type="number" step="0.05" min="0.5" max="3" value="1.6">
+        <div class="seg" style="margin-top:10px;">
+          <button id="ar-mode-base" class="on">Base distance</button>
+          <button id="ar-mode-height">Known height</button>
         </div>
-        <div style="font-size:11px;color:var(--dimmer);margin-top:8px;line-height:1.5;">Line the crosshair up with the base of the object where it meets the ground, keep your phone tilted down, and hold steady. Distance is estimated as height &divide; tan(aim angle) — approximate, works best outdoors with GPS accuracy reachable.
-      </div>
+
+        <div id="ar-base-view">
+          <div class="l" style="margin-top:12px;">Distance to target</div>
+          <div class="cov-result" style="font-size:28px;margin-top:4px;" id="ar-dist">--</div>
+          <div class="cov-inputrow" style="margin-top:12px;">
+            <span style="font-size:12px;color:var(--dim);white-space:nowrap;">Eve / phone height (m)</span>
+            <input id="ar-height" type="number" step="0.05" min="0.5" max="3" value="1.6">
+          </div>
+          <div style="font-size:11px;color:var(--dimmer);margin-top:8px;line-height:1.5;">Line the crosshair up with the base of the object where it meets the ground, keep your phone tilted down, and hold steady. Distance is estimated as height &divide; tan(aim angle) — approximate, works best outdoors with GPS accuracy reachable.
+        </div>
+        </div>
+
+        <div id="ar-height-view" style="display:none;">
+          <div class="l" style="margin-top:12px;">Distance to object</div>
+          <div class="cov-result" style="font-size:28px;margin-top:4px;" id="ar-height-dist">--</div>
+          <div class="cov-inputrow" style="margin-top:12px;">
+            <span style="font-size:12px;color:var(--dim);white-space:nowrap;">Object height (m)</span>
+            <input id="ar-obj-height" type="number" step="0.1" min="0.3" max="100" value="2">
+          </div>
+          <div class="cov-actions" style="margin-top:12px;">
+            <button class="cov-action" id="ar-mark-base">Mark base</button>
+            <button class="cov-action primary" id="ar-mark-top">Mark top</button>
+          </div>
+          <div style="font-size:11px;color:var(--dimmer);margin-top:8px;line-height:1.5;min-height:34px;" id="ar-height-status">
+            Align the crosshair with the BASE of the object and tap “Mark base”, then align with the TOP and tap “Mark top”. Enter the object's real height (a standard door is about 2 m).
+          </div>
+        </div>
     </div>
   </section>
 

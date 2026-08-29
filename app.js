@@ -664,8 +664,12 @@ $('btn-measure-reset').addEventListener('click', resetMeasure);
 // AR distance (tilt-based ranging via camera viewfinder)
 var arActive = false, arStream = null, arTimer = null;
 window.__arBeta = null;
+window.__arBetaRaw = null;
 var arHeight = parseFloat(localStorage.getItem('cedc_arheight')) || 1.6;
 $('ar-height').value = arHeight;
+var arObjHeight = parseFloat(localStorage.getItem('cedc_arobjheight')) || 2;
+$('ar-obj-height').value = arObjHeight;
+var arBaseAngle = null, arTopAngle = null;
 $('ar-height').addEventListener('input', function(){
   var v = parseFloat(this.value);
   if (isNaN(v) || v < 0.3 || v > 3) v = 1.6;
@@ -674,8 +678,23 @@ $('ar-height').addEventListener('input', function(){
   arReport();
 });
 window.addEventListener('deviceorientation', function(e){
-  if (arActive && e.beta != null) window.__arBeta = Math.abs(e.beta);
+  if (arActive && e.beta != null){ window.__arBetaRaw = e.beta; window.__arBeta = Math.abs(e.beta); }
 });
+function arAimDelta(){ // signed degrees below horizontal (+ = aiming down)
+  if (window.__arBetaRaw == null) return null;
+  return 90 - window.__arBetaRaw;
+}
+function arReportHeight(){
+  if (!arActive){ $('ar-height-dist').textContent = '--'; return; }
+  if (arBaseAngle == null || arTopAngle == null){ $('ar-height-dist').textContent = '--'; return; }
+  var denom = Math.tan(arBaseAngle * Math.PI / 180) - Math.tan(arTopAngle * Math.PI / 180);
+  if (denom < 0.02){
+    $('ar-height-dist').textContent = 'Check angles';
+    $('ar-height-status').textContent = 'The top must appear higher than the base — re-aim and mark again.';
+    return;
+  }
+  $('ar-height-dist').textContent = formatDistance(arObjHeight / denom);
+}
 function setARStatus(t){ $('ar-status').textContent = t || ''; }
 function arReport(){
   if (!arActive) return;
@@ -691,9 +710,11 @@ function stopAR(){
   if (arTimer){ clearInterval(arTimer); arTimer = null; }
   if (arStream){ arStream.getTracks().forEach(function(t){ t.stop(); }); arStream = null; }
   if ($('ar-video').srcObject){ $('ar-video').srcObject = null; }
+  arBaseAngle = null; arTopAngle = null;
   $('btn-ar-toggle').textContent = 'Start camera';
   setARStatus('');
   $('ar-dist').textContent = '--';
+  $('ar-height-dist').textContent = '--';
 }
 function startAR(){
   if (state.lat == null) setARStatus('GPS not ready yet — the estimate is more accurate once a fix is found.');
@@ -712,6 +733,34 @@ function startAR(){
   });
 }
 $('btn-ar-toggle').addEventListener('click', function(){ arActive ? stopAR() : startAR(); });
+$('ar-obj-height').addEventListener('input', function(){
+  var v = parseFloat(this.value);
+  if (isNaN(v) || v < 0.3) v = 2;
+  arObjHeight = v;
+  localStorage.setItem('cedc_arobjheight', String(arObjHeight));
+  arReportHeight();
+});
+$('ar-mark-base').addEventListener('click', function(){
+  var d = arAimDelta();
+  if (d == null){ $('ar-height-status').textContent = 'Aim the crosshair at the object base first.'; return; }
+  arBaseAngle = d;
+  $('ar-height-status').textContent = 'Base captured (' + Math.round(d) + '° below horizontal). Now aim at the TOP and tap “Mark top”.';
+  arReportHeight();
+});
+$('ar-mark-top').addEventListener('click', function(){
+  var d = arAimDelta();
+  if (d == null || arBaseAngle == null){ $('ar-height-status').textContent = 'Mark the base first, then the top.'; return; }
+  arTopAngle = d;
+  arReportHeight();
+});
+$('ar-mode-base').addEventListener('click', function(){
+  $('ar-mode-base').classList.add('on'); $('ar-mode-height').classList.remove('on');
+  $('ar-base-view').style.display = ''; $('ar-height-view').style.display = 'none';
+});
+$('ar-mode-height').addEventListener('click', function(){
+  $('ar-mode-height').classList.add('on'); $('ar-mode-base').classList.remove('on');
+  $('ar-base-view').style.display = 'none'; $('ar-height-view').style.display = '';
+});
 
 buildCovChips();
 fillCovSelects();
