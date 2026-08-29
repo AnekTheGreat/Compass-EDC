@@ -22,6 +22,7 @@ function lerpAngle(prev, next, t) {
 var state = {
   unitSystem: localStorage.getItem('cedc_units') || 'metric', // 'metric' | 'imperial'
   useTrueNorth: localStorage.getItem('cedc_truenorth') === '1',
+  use24h: localStorage.getItem('cedc_24h') === '1', // 24-hour (military) time
   wakeLock: localStorage.getItem('cedc_wakelock') === '1',
   heading: null,
   headingAccuracy: null,
@@ -343,7 +344,7 @@ function calcSunTimes(date, lat, lon){
   var rise = compute(true), set = compute(false);
   function fmt(d){
     if (!d) return '--:--';
-    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: !state.use24h});
   }
   return { rise: fmt(rise), set: fmt(set) };
 }
@@ -434,6 +435,13 @@ $('toggle-truenorth').addEventListener('click', function(){
   updateCompassUI();
 });
 
+$('toggle-24h').addEventListener('click', function(){
+  state.use24h = !state.use24h;
+  localStorage.setItem('cedc_24h', state.use24h ? '1' : '0');
+  $('toggle-24h').classList.toggle('on', state.use24h);
+  updateSunTimes();
+});
+
 $('toggle-wakelock').addEventListener('click', function(){
   state.wakeLock = !state.wakeLock;
   localStorage.setItem('cedc_wakelock', state.wakeLock ? '1' : '0');
@@ -465,6 +473,7 @@ document.addEventListener('visibilitychange', function(){
 // init settings UI from storage
 $('toggle-truenorth').classList.toggle('on', state.useTrueNorth);
 $('toggle-wakelock').classList.toggle('on', state.wakeLock);
+$('toggle-24h').classList.toggle('on', state.use24h);
 if (state.useTrueNorth) {
   $('mode-true').classList.add('on'); $('mode-magnetic').classList.remove('on');
 }

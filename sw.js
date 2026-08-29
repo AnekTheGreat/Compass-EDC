@@ -1,4 +1,4 @@
-var CACHE = 'measuret-v2';
+var CACHE = 'measuret-v3';
 var ASSETS = [
   './index.html',
   './app.js',
