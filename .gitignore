@@ -1,0 +1,11 @@
+# Gradle / Android build output
+.gradle/
+build/
+app/build/
+local.properties
+*.jks
+*.keystore
+
+# local build helper (not part of the app)
+build.sh
+gradle-build.log

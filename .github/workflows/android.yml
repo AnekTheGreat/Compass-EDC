@@ -1,0 +1,95 @@
+name: Build Android (MeasureT) AAB + APK
+
+# Builds the MeasureT Trusted Web Activity: a signed .aab for Play and a signed
+# .apk for sideloading, both named MeasureT-<version>.* so an artifact never
+# lands as the generic app-release.* from Gradle.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: measuret-android
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the MeasureT AAB + APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # The keystore the release is signed with. Base64 of the .jks, as a repo
+      # secret. Without it the build still runs and assembles an unsigned AAB,
+      # so the artifact always exists - it just is not installable.
+      - name: Write the signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MEASURET_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/measuret.jks"
+          else
+            echo "No MEASURET_KEYSTORE_BASE64 secret set — building unsigned."
+          fi
+
+      - name: Build the release AAB and APK
+        env:
+          MEASURET_KEYSTORE: ${{ secrets.MEASURET_KEYSTORE_BASE64 != '' && format('{0}/measuret.jks', runner.temp) || '' }}
+          MEASURET_STORE_PASSWORD: ${{ secrets.MEASURET_STORE_PASSWORD }}
+          MEASURET_KEY_ALIAS: ${{ secrets.MEASURET_KEY_ALIAS }}
+          MEASURET_KEY_PASSWORD: ${{ secrets.MEASURET_KEY_PASSWORD }}
+        run: gradle bundleRelease assembleRelease --no-daemon
+
+      - name: Name the artifacts after the app
+        id: ver
+        run: |
+          V="$(grep -oE 'versionName "[^"]+"' app/build.gradle | head -1 | cut -d'"' -f2)"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          cp app/build/outputs/bundle/release/app-release.aab "MeasureT-$V.aab"
+          cp app/build/outputs/apk/release/app-release.apk  "MeasureT-$V.apk"
+          ls -la "MeasureT-$V.aab" "MeasureT-$V.apk"
+
+      - name: Upload the AAB + APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeasureT-${{ steps.ver.outputs.version }}
+          path: |
+            MeasureT-${{ steps.ver.outputs.version }}.aab
+            MeasureT-${{ steps.ver.outputs.version }}.apk
+          if-no-files-found: error
+
+      # Same shape as the other apps here: a release asset, because a workflow
+      # artifact has no download counter and expires.
+      - name: Attach the APK + AAB to a release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          V="${{ steps.ver.outputs.version }}"
+          TAG="measuret-$V"
+          gh release view "$TAG" --json tagName >/dev/null 2>&1 || \
+            gh release create "$TAG" \
+              --title "MeasureT $V" \
+              --notes "Signed Android build of MeasureT $V (Trusted Web Activity)." \
+              --prerelease
+          gh release upload "$TAG" "MeasureT-$V.apk" --clobber
+          gh release upload "$TAG" "MeasureT-$V.aab" --clobber
+          for f in "MeasureT-$V.apk" "MeasureT-$V.aab"; do
+            gh release view "$TAG" --json assets -q '.assets[].name' | grep -qx "$f" || {
+              echo "::error::$f did not reach release $TAG"
+              exit 1
+            }
+          done

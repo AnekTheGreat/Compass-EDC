@@ -1,0 +1,5 @@
+// Top-level build file. The app module carries everything; here we only pin the
+// Android Gradle Plugin so every build uses the same one.
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

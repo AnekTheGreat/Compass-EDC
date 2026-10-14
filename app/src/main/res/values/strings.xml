@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">MeasureT</string>
+    <!-- The live app this wrapper opens. -->
+    <string name="web_url">https://anekthegreat.github.io/Compass-EDC/</string>
+    <!-- Allows this package to open the site without an address bar. Paired with
+         the matching com.measuret.app entry in the site's .well-known/assetlinks.json. -->
+    <string name="asset_statements">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://anekthegreat.github.io\" } }]</string>
+</resources>

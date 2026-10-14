@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+}
+
+// MeasureT is a Trusted Web Activity: the Android app opens the existing PWA at
+// anekthegreat.github.io/Compass-EDC/ edge-to-edge in Chrome, with no address bar
+// once the site's Digital Asset Links say this package may open it. That is what
+// removes the "link at the top" the app showed while it was only a browser tab.
+//
+// The signed release AAB + APK are named "MeasureT-<version>" by the workflow.
+android {
+    namespace 'com.measuret.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.measuret.app"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    // Signing comes from the environment in CI; the same keys can be dropped in
+    // locally. A release build with no keystore still assembles (unsigned), so a
+    // missing key never blocks a plain build.
+    def keystorePath = System.getenv("MEASURET_KEYSTORE")
+    signingConfigs {
+        if (keystorePath != null) {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv("MEASURET_STORE_PASSWORD")
+                keyAlias System.getenv("MEASURET_KEY_ALIAS")
+                keyPassword System.getenv("MEASURET_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (keystorePath != null) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    // The Trusted Web Activity launcher (LauncherActivity + DelegationService).
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+}
