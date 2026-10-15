@@ -44,6 +44,16 @@ var MS_TO_MPH = 2.23694;
 
 function $(id){ return document.getElementById(id); }
 
+// localStorage, but never fatal. A WebView with storage switched off throws a
+// SecurityError on the first touch of localStorage, and because these reads sit in the
+// middle of this file's startup, that one throw used to stop every listener below it from
+// ever being attached - which is what a screen with dead tabs, a dead switch and a dead
+// nav looks like. Nothing here is allowed to be the reason the app cannot be driven.
+function storeGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
+function storeSet(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+var SENSORS_KEY = 'cedc_sensors_ok';
+var GEO_KEY = 'cedc_geo_ok';
+
 // ---------- NAV ----------
 document.querySelectorAll('nav button').forEach(function(btn){
   btn.addEventListener('click', function(){
@@ -51,6 +61,11 @@ document.querySelectorAll('nav button').forEach(function(btn){
     document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
     btn.classList.add('active');
     $(btn.dataset.screen).classList.add('active');
+    // The Convert tab always lands on the converter. That screen carries a Convert / Measure
+    // switch of its own, so a tab tap that left the screen on Measure looked like a tap that
+    // did nothing at all.
+    if (btn.dataset.screen === 'convert-screen') setCovMode('convert');
+    if ($(btn.dataset.screen)) $(btn.dataset.screen).scrollTop = 0;
   });
 });
 
@@ -356,24 +371,47 @@ function estimateDeclination(lat, lon){
 }
 
 // ---------- GEOLOCATION ----------
-if ('geolocation' in navigator) {
-  navigator.geolocation.watchPosition(function(pos){
-    state.lat = pos.coords.latitude;
-    state.lon = pos.coords.longitude;
-    state.gpsAccuracy = pos.coords.accuracy;
-    state.speed = pos.coords.speed;
-    state.declination = estimateDeclination(state.lat, state.lon);
-    if (pos.coords.altitude != null) {
-      ingestAltitude(pos.coords.altitude, pos.coords.altitudeAccuracy);
-    }
-    updateLocationUI();
-    sampleMeasure();
-    updateMeasureUI();
-  }, function(err){
-    $('loc-lat').textContent = 'No access';
-    $('elev-num').textContent = 'No access';
-  }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+// ASKED FOR ONCE, AND REMEMBERED. This used to call watchPosition the instant the app
+// started, on every single launch, so the OS location dialog landed on top of the app again
+// and again until it was allowed - and the app sat behind the dialog while it waited. The
+// first fix is written down; from then on the watcher is simply started again, with no
+// dialog and nothing to tap. A phone that has never allowed location is still asked, because
+// the compass, the elevation and the distance-to-pin all need it - it is asked because it is
+// needed, not every time because the app opened.
+function onGeoPos(pos){
+  storeSet(GEO_KEY, '1');
+  state.lat = pos.coords.latitude;
+  state.lon = pos.coords.longitude;
+  state.gpsAccuracy = pos.coords.accuracy;
+  state.speed = pos.coords.speed;
+  state.declination = estimateDeclination(state.lat, state.lon);
+  if (pos.coords.altitude != null) {
+    ingestAltitude(pos.coords.altitude, pos.coords.altitudeAccuracy);
+  }
+  updateLocationUI();
+  sampleMeasure();
+  updateMeasureUI();
 }
+function onGeoErr(){
+  $('loc-lat').textContent = 'No access';
+  $('elev-num').textContent = 'No access';
+}
+function startGeoWatch(){
+  if (state.geoWatch) return;
+  state.geoWatch = navigator.geolocation.watchPosition(onGeoPos, onGeoErr, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+}
+function startGeo(){
+  if (storeGet(GEO_KEY)) { startGeoWatch(); return; }
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then(function(p){
+      if (p && p.state === 'denied') { onGeoErr(); return; }
+      startGeoWatch();
+    }).catch(startGeoWatch);
+    return;
+  }
+  startGeoWatch();
+}
+if ('geolocation' in navigator) { startGeo(); }
 
 // ---------- DEVICE ORIENTATION PERMISSION (iOS) ----------
 function initOrientation(){
@@ -381,10 +419,15 @@ function initOrientation(){
   window.addEventListener('deviceorientation', handleOrientation, true);
 }
 
+// ASKED ONCE, NOT ON EVERY LAUNCH. This panel was built on every start, so a phone whose
+// WebView exposes requestPermission got "needs motion and orientation sensors" in front of
+// it every time the app opened - even after the sensors had been allowed and were working
+// fine. The grant is remembered now, and a permission already granted is simply used:
+// requestPermission() answers out of the stored state and cannot prompt again.
 var needsPermission = typeof DeviceOrientationEvent !== 'undefined' &&
   typeof DeviceOrientationEvent.requestPermission === 'function';
 
-if (needsPermission) {
+if (needsPermission && !storeGet(SENSORS_KEY)) {
   var overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:linear-gradient(180deg,#cdeaff,#8fc7ee);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;padding:24px;text-align:center;';
   overlay.innerHTML = '<div style="font-size:15px;color:#0e3350;margin-bottom:18px;line-height:1.5;">MeasureT needs access to<br>motion and orientation sensors</div><button id="grant-btn" style="background:linear-gradient(180deg,#5bb8f2,#2f8fd6);color:#fff;border:1px solid #2f8fd6;padding:14px 28px;border-radius:24px;font-size:14px;box-shadow:0 6px 16px rgba(47,143,214,0.35);">Enable sensors</button>';
@@ -392,6 +435,7 @@ if (needsPermission) {
   $('grant-btn').addEventListener('click', function(){
     DeviceOrientationEvent.requestPermission().then(function(res){
       if (res === 'granted') {
+        storeSet(SENSORS_KEY, '1');
         initOrientation();
         overlay.remove();
       }
@@ -647,13 +691,30 @@ function resetMeasure(){
   updateMeasureUI();
 }
 
+// THE WAY BACK STAYS ON SCREEN. This screen's Measure half is long - a distance readout,
+// three action buttons, two cards and the camera viewfinder - and the Convert / Measure
+// switch sat at the top of a screen that scrolls, so scrolling down carried the switch off
+// the top edge and the only way back to Convert with it. The switch is pinned under the top
+// bar now, and switching returns the screen to the top, so Convert is always one tap away.
+function pinCovSwitch(){
+  var seg = $('cov-mode-convert').parentNode;
+  if (!seg) return;
+  seg.style.position = 'sticky';
+  seg.style.top = '8px';
+  seg.style.zIndex = '6';
+  seg.style.background = 'rgba(233,244,252,0.94)';
+  seg.style.boxShadow = '0 2px 10px rgba(60,120,160,0.10)';
+}
 function setCovMode(m){
   var isC = m === 'convert';
   $('cov-mode-convert').classList.toggle('on', isC);
   $('cov-mode-measure').classList.toggle('on', !isC);
   $('cov-convert-view').style.display = isC ? '' : 'none';
   $('cov-measure-view').style.display = isC ? 'none' : '';
+  var scr = $('convert-screen');
+  if (scr) scr.scrollTop = 0;
 }
+pinCovSwitch();
 
 $('cov-mode-convert').addEventListener('click', function(){ setCovMode('convert'); });
 $('cov-mode-measure').addEventListener('click', function(){ setCovMode('measure'); });
