@@ -1,0 +1,60 @@
+name: Apply the MeasureT UI fix
+
+# One dispatch, and MeasureT's app.js gets its three behavioural fixes. app.js is 40 KB and
+# the fix has to land byte for byte, so it travels as a fixer: patch-measuret-ui.py holds the
+# anchors and the new text, and this runs it against the checked-out file. What the fix
+# changes, and what was measured on the patched page, is at the top of that script.
+#
+# It commits only app.js. There is no build in this repository - the phone loads index.html
+# and app.js straight off the branch - so a push to main IS the release.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: measuret-ui
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply the fix
+        run: |
+          set -euo pipefail
+          python3 .github/workflows/patch-measuret-ui.py
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- app.js; then
+            echo 'nothing to commit - app.js already carries the fix'
+            exit 0
+          fi
+          git config user.name 'MeasureT fix'
+          git config user.email 'actions@github.com'
+          git add app.js
+          git status --porcelain
+          # app.js only: this step exists to land one file, and should fail rather than
+          # quietly sweep anything else the runner happened to touch into the commit.
+          stray=$(git diff --cached --name-only | grep -v '^app\.js$' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::unexpected path(s) in this commit: $stray"
+            exit 1
+          fi
+          git commit -m 'MeasureT: the Convert / Measure switch is always reachable, and permissions are asked once'
+          git push
+          echo '--- landed ---'
+          git log --oneline -1
+
+      - name: Prove the pushed tree carries the fix
+        run: |
+          set -euo pipefail
+          python3 .github/workflows/patch-measuret-ui.py --check
+          grep -c 'pinCovSwitch' app.js
+          grep -c 'cedc_sensors_ok' app.js
