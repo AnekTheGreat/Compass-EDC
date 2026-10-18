@@ -1,6 +1,25 @@
 (function(){
 'use strict';
 
+// ---------- RELEASE ----------
+// APP_VERSION, the CHANGELOG below and updates.json are kept in step by dev/ota.mjs
+// ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
+//  "node dev/ota.mjs --check" fails if any of the four disagree).
+// Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
+var APP_VERSION = '1.1.0';
+var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
+var CHANGELOG = [
+  { version: '1.1.0', date: 'October 17, 2026', title: 'The Convert / Measure switch can no longer disappear, and MeasureT now updates itself', items: [
+    'Tapping Measure collapsed the Convert / Measure switch at the top of the screen to a 2px sliver, so Convert was gone and you were stuck: the switch is the one panel on that screen whose rounded corners clip it, and a screen the size of the Measure view was squeezing it flat. It now holds its size and stays pinned, so Convert is always one tap away.',
+    'The sensor permission panel always comes down. Denying motion &amp; orientation access used to leave a full-screen panel over the app forever - every tab gone, every tap swallowed.',
+    'MeasureT now checks for new releases on every start, in Settings → Updates, and shows what the release changed before it applies.',
+    'Updates arrive while the app runs: the page now loads newest-first and falls back to the saved copy only when the network is gone, instead of pinning the first copy it ever saw.'
+  ]},
+  { version: '1.0.0', date: 'July 17, 2026', title: 'First release', items: [
+    'Compass, elevation, location, level, a unit converter, GPS measurement and AR distance.'
+  ]}
+];
+
 // ---------- STATE ----------
 var SMOOTH = 0.09;   // EMA alpha — lower = smoother (0.09 ≈ 110 ms time-constant)
 var DEAD_ZONE = 1.5; // hold the dial still unless the reading moves more than this (degrees)
@@ -437,8 +456,13 @@ if (needsPermission && !storeGet(SENSORS_KEY)) {
       if (res === 'granted') {
         storeSet(SENSORS_KEY, '1');
         initOrientation();
-        overlay.remove();
       }
+      // The overlay used to come down only on 'granted'. An answer of 'denied' (or anything
+      // else that resolves — not rejects) left a z-index:999 full-screen panel over the whole
+      // app forever: every tab gone, every tap swallowed. Sensors are optional, the app is not:
+      // the panel always comes down, and listeners are wired either way (they stay silent
+      // without permission). A denial is retried on the next launch, as before.
+      overlay.remove();
     }).catch(function(){ overlay.remove(); });
   });
 } else {
@@ -704,6 +728,12 @@ function pinCovSwitch(){
   seg.style.zIndex = '6';
   seg.style.background = 'rgba(233,244,252,0.94)';
   seg.style.boxShadow = '0 2px 10px rgba(60,120,160,0.10)';
+  // The switch is a flex item of #convert-screen (a column flex scroller) and the only
+  // child with overflow:hidden - so its automatic minimum height is 0 by spec. The moment
+  // the Measure view made the screen's content taller than the viewport, flex shrink crushed
+  // the switch to a 2px line, clipping both buttons out of the picture: the tab disappeared
+  // and Convert could not be tapped again. Sticky kept it on screen; this keeps it alive.
+  seg.style.flexShrink = '0';
 }
 function setCovMode(m){
   var isC = m === 'convert';
@@ -898,11 +928,107 @@ setInterval(function(){
   if ($('elevation-screen').classList.contains('active')) drawElevGraph();
 }, 3000);
 
-// register service worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function(){
-    navigator.serviceWorker.register('sw.js').catch(function(){});
-  });
+// ---------- RELEASES / OTA ----------
+// The manifest is read straight from the published repo, wherever this page is running
+// from - the hosted PWA, an installed browser app, or a WebView with assets on disk -
+// so a build that boots cannot judge itself by its own (stale) copy.
+function cmpVer(a, b){
+  var pa = String(a).split('.'), pb = String(b).split('.'), n = Math.max(pa.length, pb.length);
+  for (var i = 0; i < n; i++){
+    var na = parseInt(pa[i], 10) || 0, nb = parseInt(pb[i], 10) || 0;
+    if (na !== nb) return na < nb ? -1 : 1;
+  }
+  return 0;
 }
+function escapeHtml(s){
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+var otaReg = null;
+function setOtaStatus(txt){ var el = $('ota-status'); if (el) el.textContent = txt; }
+function registerSW(){
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('sw.js').then(function(r){ otaReg = r; }).catch(function(){});
+}
+
+function showUpdateDialog(m){
+  if ($('ota-dialog') || !m || !m.version) return;
+  var notes = (m.notes || []).slice(0, 6).map(function(n){ return '<li>' + n + '</li>'; }).join('');
+  var d = document.createElement('div');
+  d.id = 'ota-dialog';
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(14,51,80,0.38);display:flex;align-items:flex-end;justify-content:center;z-index:900;';
+  d.innerHTML =
+    '<div style="width:calc(100% - 28px);max-width:430px;margin-bottom:16px;border-radius:22px;padding:18px 20px 20px;background:rgba(240,248,253,0.99);border:1px solid rgba(255,255,255,0.8);box-shadow:0 -10px 34px rgba(60,120,160,0.35);">' +
+      '<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#4d7999;font-weight:600;">New release' + (m.date ? ' &middot; ' + escapeHtml(m.date) : '') + '</div>' +
+      '<div style="font-size:21px;font-weight:600;color:#0e3350;margin-top:6px;">MeasureT v' + escapeHtml(m.version) + '</div>' +
+      (m.title ? '<div style="font-size:13px;color:#4d7999;margin-top:4px;line-height:1.5;">' + escapeHtml(m.title) + '</div>' : '') +
+      (notes ? '<ul style="margin:12px 0 0;padding-left:18px;color:#0e3350;font-size:13px;line-height:1.55;">' + notes + '</ul>' : '') +
+      '<div style="display:flex;gap:10px;margin-top:16px;">' +
+        '<button id="ota-later" style="flex:1;padding:13px 0;border-radius:15px;border:1px solid rgba(255,255,255,0.7);background:rgba(255,255,255,0.6);color:#4d7999;font-size:14px;">Later</button>' +
+        '<button id="ota-apply" style="flex:1;padding:13px 0;border-radius:15px;border:none;background:linear-gradient(180deg,#5bb8f2,#2f8fd6);color:#fff;font-size:14px;font-weight:600;box-shadow:0 4px 12px rgba(47,143,214,0.35);">Update now</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(d);
+  d.querySelector('#ota-later').addEventListener('click', function(){
+    storeSet('cedc_ota_seen_' + m.version, '1');
+    d.remove();
+  });
+  d.querySelector('#ota-apply').addEventListener('click', function(){ applyUpdate(m); });
+}
+
+function applyUpdate(m){
+  if (m && m.version) storeSet('cedc_ota_seen_' + m.version, '1');
+  var dlg = $('ota-dialog'); if (dlg) dlg.remove();
+  if (setOtaStatus) setOtaStatus('Updating…');
+  if (!('serviceWorker' in navigator)) { location.reload(); return; }
+  var done = false;
+  function finish(){ if (done) return; done = true; location.reload(); }
+  // The new worker skipWaiting()s itself on install, so taking over raises controllerchange.
+  navigator.serviceWorker.addEventListener('controllerchange', finish);
+  (otaReg ? Promise.resolve(otaReg) : (navigator.serviceWorker.getRegistration() || Promise.reject()))
+    .then(function(reg){
+      if (reg && reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+      if (reg && reg.update) return reg.update().catch(function(){});
+    })
+    .catch(function(){});
+  // If the published bytes were identical (no new worker), the reload still follows.
+  setTimeout(finish, 2500);
+}
+
+function checkForUpdates(interactive){
+  if (typeof fetch !== 'function'){ if (interactive) setOtaStatus('v' + APP_VERSION + ' · check unavailable'); return Promise.resolve(null); }
+  setOtaStatus('Checking…');
+  return fetch(OTA_ENDPOINT, { cache: 'no-store' })
+    .then(function(r){ if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
+    .then(function(m){
+      if (!m || !m.version) throw new Error('bad manifest');
+      if (cmpVer(m.version, APP_VERSION) > 0){
+        setOtaStatus('v' + m.version + ' is available');
+        if (interactive || storeGet('cedc_ota_seen_' + m.version) !== '1') showUpdateDialog(m);
+      } else {
+        setOtaStatus('Up to date · v' + APP_VERSION);
+        if (interactive){
+          var el = $('btn-check-updates');
+          if (el){ el.textContent = 'Fresh'; setTimeout(function(){ el.textContent = 'Check'; }, 1500); }
+        }
+      }
+      return m;
+    })
+    .catch(function(){
+      setOtaStatus(interactive ? 'No connection · v' + APP_VERSION : 'Offline · v' + APP_VERSION);
+      return null;
+    });
+}
+
+if ($('app-version-line')) $('app-version-line').textContent = 'v' + APP_VERSION;
+if ($('btn-check-updates')) $('btn-check-updates').addEventListener('click', function(){ checkForUpdates(true); });
+
+// On start: wire the worker, then ask the published manifest what is out there. The check
+// waits for 'load' so it never competes with the app's own first paint, and a release the
+// user dismissed for THIS version stays dismissed.
+registerSW();
+window.addEventListener('load', function(){
+  setTimeout(function(){ checkForUpdates(false); }, 1200);
+});
+
 
 })();

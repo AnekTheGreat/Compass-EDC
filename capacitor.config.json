@@ -1,5 +1,9 @@
 {
   "appId": "com.CompassEDC.myapp",
   "appName": "MeasureT",
-  "webDir": "www"
+  "webDir": "www",
+  "server": {
+    "url": "https://anekthegreat.github.io/Compass-EDC/",
+    "clearCache": false
+  }
 }
