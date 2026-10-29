@@ -1,0 +1,79 @@
+name: Apply the MeasureT 1.1.1 fix
+
+# One dispatch, and MeasureT's Convert tab always has a way back.
+#
+# index.html and app.js are the app - there is no build in this repository, the phone loads
+# both straight off the branch - and they have to land byte for byte, so the fix travels as
+# a patcher: dev/patch-111.py holds the anchors and the new text, and this runs it against
+# the checked-out tree.
+#
+# A push to main IS the release here. The page is a service worker away from every installed
+# copy, so the version, the changelog head and updates.json all have to agree in the same
+# commit: node dev/ota.mjs republishes updates.json and stamps sw.js and package.json from
+# APP_VERSION, and its --check fails the run if any of the four disagree.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: measuret-111
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Apply the fix
+        run: |
+          set -euo pipefail
+          python3 dev/patch-111.py
+          python3 dev/patch-111.py --check
+
+      - name: Publish the OTA manifest for this version
+        run: |
+          set -euo pipefail
+          node dev/ota.mjs
+          node dev/ota.mjs --check
+          node -p "JSON.stringify(require('./updates.json'), null, 1)"
+
+      - name: Check both files parse
+        run: |
+          set -euo pipefail
+          node --check app.js
+          # The two strings this release is about, in the two files that carry them.
+          grep -c 'id="btn-measure-back"' index.html
+          grep -c "btn-measure-back" app.js
+          grep -c 'min-height:44px' index.html
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- index.html app.js sw.js updates.json package.json; then
+            echo 'nothing to commit - the tree already carries 1.1.1'
+            exit 0
+          fi
+          git config user.name 'MeasureT release'
+          git config user.email 'actions@github.com'
+          git add index.html app.js sw.js updates.json package.json
+          git status --porcelain
+          # Exactly the files a release owns. A stray path here means the patch touched
+          # something it should not have, and the run must fail rather than sweep it in.
+          stray=$(git diff --cached --name-only | grep -vE '^(index\.html|app\.js|sw\.js|updates\.json|package\.json)$' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::unexpected path(s) in the release commit: $stray"
+            exit 1
+          fi
+          git commit -m "MeasureT 1.1.1: the Measure half carries its own way back to Convert"
+          git push
+          echo '--- landed ---'
+          git log --oneline -1
