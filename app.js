@@ -6,9 +6,14 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.1.0';
+var APP_VERSION = '1.1.1';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.1.1', date: 'October 29, 2026', title: 'There is always a way back to Convert', items: [
+    'A <b>Convert</b> button now sits at the top of the Measure half itself &mdash; the first thing on the screen, above the distance readout. The switch at the top of the tab is no longer the only way back, so opening Measure can never leave you with nowhere to go.',
+    'The <b>Convert / Measure switch</b> reserves its own height now (44 px, and it refuses to shrink). It is the one panel on that screen whose rounded corners clip it, and the Measure half was squeezing it to a sliver: that is the switch that kept disappearing.',
+    'Nothing else changed &mdash; the converter, GPS measuring, the AR range finder, the compass, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.1.0', date: 'October 17, 2026', title: 'The Convert / Measure switch can no longer disappear, and MeasureT now updates itself', items: [
     'Tapping Measure collapsed the Convert / Measure switch at the top of the screen to a 2px sliver, so Convert was gone and you were stuck: the switch is the one panel on that screen whose rounded corners clip it, and a screen the size of the Measure view was squeezing it flat. It now holds its size and stays pinned, so Convert is always one tap away.',
     'The sensor permission panel always comes down. Denying motion &amp; orientation access used to leave a full-screen panel over the app forever - every tab gone, every tap swallowed.',
@@ -748,6 +753,12 @@ pinCovSwitch();
 
 $('cov-mode-convert').addEventListener('click', function(){ setCovMode('convert'); });
 $('cov-mode-measure').addEventListener('click', function(){ setCovMode('measure'); });
+// 1.1.1 - the way out of the Measure half, from inside the Measure half. Guarded: a page
+// from an older cache could be paired with this script for one load, and a missing button
+// must not stop the rest of the file from wiring itself up.
+if ($('btn-measure-back')){
+  $('btn-measure-back').addEventListener('click', function(){ setCovMode('convert'); });
+}
 $('cov-value').addEventListener('input', updateCovResult);
 $('cov-from').addEventListener('change', updateCovResult);
 $('cov-to').addEventListener('change', updateCovResult);
