@@ -6,9 +6,13 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.1.1';
+var APP_VERSION = '1.1.2';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.1.2', date: 'November 3, 2026', title: 'MeasureT can be thanked, in Settings', items: [
+    'A <b>Support</b> group now sits in Settings, above the version line: five amounts, each one an ordinary Stripe payment page opened in the browser. Nothing unlocks and nothing is sent from the app — a tip is a thank you, and the app is the same either way.',
+    'Nothing else changed — the converter, GPS measuring, the AR range finder, the compass, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.1.1', date: 'October 29, 2026', title: 'There is always a way back to Convert', items: [
     'A <b>Convert</b> button now sits at the top of the Measure half itself &mdash; the first thing on the screen, above the distance readout. The switch at the top of the tab is no longer the only way back, so opening Measure can never leave you with nowhere to go.',
     'The <b>Convert / Measure switch</b> reserves its own height now (44 px, and it refuses to shrink). It is the one panel on that screen whose rounded corners clip it, and the Measure half was squeezing it to a sliver: that is the switch that kept disappearing.',

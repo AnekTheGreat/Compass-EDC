@@ -1,6 +1,6 @@
 // CACHE is stamped from app.js APP_VERSION by dev/ota.mjs - a released version always
 // brings a cache of its own, and activate drops everything older.
-var CACHE = 'measuret-v1.1.1';
+var CACHE = 'measuret-v1.1.2';
 var ASSETS = [
   './index.html',
   './app.js',
