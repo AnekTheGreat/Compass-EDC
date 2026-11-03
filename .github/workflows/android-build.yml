@@ -1,9 +1,10 @@
 name: Build Android (Capacitor) AAB + APK
 
 # Builds MeasureT — the web app wrapped as a WebView Android app with Capacitor — entirely
-# in CI, so no Android Studio is needed. Every run produces:
+# in CI, so no Android Studio is needed. Every run produces all four:
 #
 #   MeasureT-<version>-debug.apk   installable by hand (signed with the debug key)
+#   MeasureT-<version>-debug.aab   the debug bundle, for a Play internal track
 #   MeasureT-<version>.aab         the Play Console upload (signed once the keystore
 #                                  secrets below are set, unsigned until then)
 #   MeasureT-<version>.apk         the signed release APK, only when signing is configured
@@ -39,7 +40,7 @@ jobs:
 
     env:
       # Optional repository secrets. With them, the release AAB/APK are signed with the
-      # real upload keystore. Without them the AAB is still produced (unsigned) and the
+      # real upload keystore. Without them the AABs are still produced (unsigned) and the
       # debug APK is the installable file. Never printed, never committed.
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -100,6 +101,11 @@ jobs:
       - name: Build the installable debug APK
         run: cd android && chmod +x gradlew && ./gradlew assembleDebug --no-daemon
 
+      # The debug bundle: the same code Play would receive from a debug build, for an internal
+      # track. assemble* makes the APK, bundle* makes the AAB.
+      - name: Build the debug AAB
+        run: cd android && ./gradlew bundleDebug --no-daemon
+
       - name: Build the release AAB
         run: cd android && ./gradlew bundleRelease --no-daemon
 
@@ -107,7 +113,7 @@ jobs:
         if: env.ANDROID_KEYSTORE_BASE64 != ''
         run: cd android && ./gradlew assembleRelease --no-daemon
 
-      - name: Collect the AAB and the APK
+      - name: Collect the APKs and the AABs
         id: dist
         run: |
           set -e
@@ -115,24 +121,35 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"
           mkdir -p dist
           cp android/app/build/outputs/apk/debug/app-debug.apk "dist/MeasureT-$V-debug.apk"
+
+          # Both bundles need naming to be checked: gradle writes neither into dist by itself.
+          DAAB="$(find android/app/build/outputs/bundle/debug -name '*.aab' | head -n 1)"
+          if [ -z "$DAAB" ]; then
+            echo '::error::no debug .aab was produced by bundleDebug'
+            ls -R android/app/build/outputs/bundle 2>/dev/null || true
+            exit 1
+          fi
+          cp "$DAAB" "dist/MeasureT-$V-debug.aab"
+
           AAB="$(find android/app/build/outputs/bundle/release -name '*.aab' | head -n 1)"
           if [ -z "$AAB" ]; then
             echo '::error::no .aab was produced by bundleRelease'
             exit 1
           fi
           cp "$AAB" "dist/MeasureT-$V.aab"
+
           if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk "dist/MeasureT-$V.apk"
           fi
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             echo 'signing: upload keystore in use'
           else
-            echo 'signing: no keystore secret set, so the AAB is UNSIGNED and the debug APK is the installable file'
+            echo 'signing: no keystore secret set, so the AABs are UNSIGNED and the debug APK is the installable file'
           fi
           echo '--- dist ---'
           ls -l dist
 
-      - name: Upload the AAB and the APK
+      - name: Upload the APKs and the AABs
         uses: actions/upload-artifact@v4
         with:
           name: MeasureT-${{ steps.dist.outputs.version }}
