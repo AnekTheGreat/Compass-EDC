@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MeasureT — Privacy Policy</title>
+<meta name="description" content="Privacy policy for the MeasureT Android app: location and camera are used only while you measure, and nothing is sent to us.">
+<style>
+  :root { --ink:#11161d; --muted:#5d6774; --paper:#f8f9fb; --rule:#e2e6ec; --accent:#164e63; --card:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#e9edf3; --muted:#a2acba; --paper:#11151b; --rule:#2a323d; --accent:#88c7da; --card:#181e26; } }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body { margin:0; padding:3rem 1.25rem 5rem; background:var(--paper); color:var(--ink); font:17px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width:44rem; margin:0 auto; }
+  header { border-bottom:1px solid var(--rule); padding-bottom:1.25rem; margin-bottom:2rem; }
+  h1 { font-size:1.9rem; line-height:1.2; margin:0 0 .5rem; letter-spacing:-.01em; }
+  h2 { font-size:1.15rem; margin:2.5rem 0 .6rem; }
+  h3 { font-size:1rem; margin:1.5rem 0 .3rem; }
+  p, li { margin:0 0 .85rem; }
+  ul { padding-left:1.25rem; }
+  li { margin-bottom:.5rem; }
+  .sub { color:var(--muted); font-size:.95rem; margin:0; }
+  .lede { background:var(--card); border:1px solid var(--rule); border-radius:10px; padding:1.1rem 1.25rem; margin:0 0 2rem; }
+  .lede p:last-child { margin-bottom:0; }
+  a { color:var(--accent); }
+  code { font-size:.9em; background:var(--card); border:1px solid var(--rule); border-radius:4px; padding:.05em .3em; }
+  footer { margin-top:3rem; padding-top:1.25rem; border-top:1px solid var(--rule); color:var(--muted); font-size:.9rem; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>MeasureT — Privacy Policy</h1>
+  <p class="sub">Applies to MeasureT for Android, version 1.1.1 and later. Effective 4 November 2026.</p>
+</header>
+
+<div class="lede">
+  <p><strong>The short version: MeasureT has no account, no analytics, no advertising and no server that collects anything about you. Your location and the camera are used only while you are using a tool that needs them, and what they report stays on the phone.</strong></p>
+  <p>The app is a measuring instrument — compass, level, elevation, unit converter, distance and an AR range finder. None of those readings are stored by us or sent to us. The one thing the app fetches from outside is its own interface, from this project's GitHub Pages site.</p>
+</div>
+
+<h2>Who we are</h2>
+<p>MeasureT is an independent Android app. In this policy, “we” and “us” mean the app's developer, and “the app” means MeasureT. You can reach us at the address in <a href="#contact">Contact</a>.</p>
+
+<h2>How the app is delivered</h2>
+<p>MeasureT's interface is a web page. It is published from this project's own GitHub Pages address (<code>anekthegreat.github.io/Compass-EDC</code>) and the app loads it over HTTPS, so the interface you see is the current published version rather than a frozen copy. The site is ours; the hosting is GitHub's. When the app opens, and when it asks that site for its “what's new” file, GitHub receives the request — your IP address and standard request headers, as any web host does — and it caches the page's files on your phone so the app still works offline.</p>
+<p>That request carries no identifier for you, your phone or your installation, and no measurement, location or usage information is included in it.</p>
+
+<h2>Location</h2>
+<p>Some tools need to know where you are: the elevation and altitude screens, the distance and bearing to a point, GPS measuring, and the one-tap “measure a person's height” reading. For those, the app asks Android for location access. It asks when you open such a tool, not at install time, and you can decline or revoke it in Android Settings — the compass, level and converter keep working without it.</p>
+<p>While one of those tools is open, the app reads your position from the phone: latitude and longitude, accuracy, speed and, where the phone reports it, altitude. Those numbers are held while the tool is on screen so it can show a heading, an elevation or a distance. <strong>They are not written to the app's storage and they are not sent anywhere.</strong> There is no background location: the app does not ask for or read your position while it is closed, and it holds no location permission request from a screen you are not using.</p>
+
+<h2>Camera</h2>
+<p>The AR range finder uses the rear camera, and only while that screen is open. The live picture is used on screen to line a crosshair up with the object you are measuring; the app does not take a photo, does not record video, does not save the camera picture, and does not send it anywhere. Leaving the AR screen ends the camera use.</p>
+
+<h2>Sensors</h2>
+<p>The compass and the level read the phone's own orientation sensors. Those readings need no permission, are shown on screen, and are not stored or transmitted.</p>
+
+<h2>Settings kept on your phone</h2>
+<p>MeasureT remembers a handful of preferences in the app's own local storage on your phone: metric or imperial units, true north or magnetic north, 12- or 24-hour time, whether to keep the screen awake, and the two heights you last typed into the AR tool. Nothing else is saved, and those values are not personal data about you.</p>
+
+<h2>What we never do</h2>
+<ul>
+  <li>We do not collect, transmit or store your location, camera picture or measurements on any server. There is no server of ours.</li>
+  <li>We do not use analytics, crash reporting, advertising or attribution software, and the app contains no advertising identifier.</li>
+  <li>We do not sell, rent or share data with anyone, because we do not have it.</li>
+  <li>We do not read your contacts, messages, photos, files or accounts, and the app has no permission to do so.</li>
+  <li>We do not require a name, email address, phone number or account of any kind.</li>
+  <li>We do not track you across other apps or websites.</li>
+</ul>
+
+<h2>Keeping and deleting your data</h2>
+<p>There is nothing of yours held for us to delete. Location readings and camera pictures are never written to storage, so there is nothing to clear; the preferences listed above are the only thing the app keeps.</p>
+<ul>
+  <li>To clear the saved preferences, uninstall the app — Android deletes its storage and the cached interface files with it.</li>
+  <li>To stop the app using your location or camera, revoke those permissions in Android Settings.</li>
+  <li>If Android's own backup is enabled on your device, the system may include the app's small preferences file in that backup. That copy is controlled by your Google settings and Google's privacy policy, not by us.</li>
+</ul>
+
+<h2>Children</h2>
+<p>MeasureT is a general-purpose measuring tool and is not directed at children. It collects no personal data from anyone, of any age.</p>
+
+<h2>Changes to this policy</h2>
+<p>If a future version of the app changes what it does with data, this page will be updated before that version is published, and the effective date above will change. The current version of this policy always lives at this address.</p>
+
+<h2 id="contact">Contact</h2>
+<p>Questions about this policy or about what the app does can go to <a href="mailto:sidecutsupport@gmail.com">sidecutsupport@gmail.com</a>, or to the issue tracker at <a href="https://github.com/AnekTheGreat/Compass-EDC/issues">github.com/AnekTheGreat/Compass-EDC</a>.</p>
+
+<footer>
+  <p>MeasureT — package <code>com.CompassEDC.myapp</code>. This policy covers the Android app wherever you installed it from.</p>
+</footer>
+
+</main>
+</body>
+</html>
