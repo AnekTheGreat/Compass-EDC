@@ -1,0 +1,79 @@
+name: Apply the MeasureT AR-camera stop
+
+# One dispatch, and the AR camera stops when its screen is left.
+#
+# index.html and app.js are the app - there is no build in this repository, the phone loads
+# both straight off the branch - and app.js is ~49 KB that has to land byte for byte, so the
+# fix travels as a patcher: .github/workflows/patch-ar-stop.py holds the anchors and the new
+# text, and this runs it against the checked-out tree.
+#
+# A push to main IS the release here. The page is a service worker away from every installed
+# copy, so the version, the changelog head and updates.json have to agree in the same commit:
+# node dev/ota.mjs republishes updates.json and stamps sw.js and package.json from
+# APP_VERSION, and its --check fails the run if any of the four disagree.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: measuret-ar-stop
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Apply the fix
+        run: |
+          set -euo pipefail
+          python3 .github/workflows/patch-ar-stop.py
+          python3 .github/workflows/patch-ar-stop.py --check
+
+      - name: Publish the OTA manifest for this version
+        run: |
+          set -euo pipefail
+          node dev/ota.mjs
+          node dev/ota.mjs --check
+          node -p "JSON.stringify(require('./updates.json'), null, 1)"
+
+      - name: Check app.js parses and carries both stops
+        run: |
+          set -euo pipefail
+          node --check app.js
+          grep -c "if (btn.dataset.screen !== 'convert-screen' && arActive) stopAR();" app.js
+          grep -c "if (isC && arActive) stopAR();" app.js
+          # The Stop button's own handler must survive the patch untouched.
+          grep -c "arActive ? stopAR() : startAR();" app.js
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- app.js sw.js updates.json package.json; then
+            echo 'nothing to commit - the tree already carries 1.1.3'
+            exit 0
+          fi
+          git config user.name 'MeasureT release'
+          git config user.email 'actions@github.com'
+          git add app.js sw.js updates.json package.json
+          git status --porcelain
+          # Exactly the files a release owns. A stray path here means the patch touched
+          # something it should not have, and the run must fail rather than sweep it in.
+          stray=$(git diff --cached --name-only | grep -vE '^(app\.js|sw\.js|updates\.json|package\.json)$' || true)
+          if [ -n "$stray" ]; then
+            echo "::error::unexpected path(s) in the release commit: $stray"
+            exit 1
+          fi
+          git commit -m "MeasureT 1.1.3: leaving the AR screen stops the camera"
+          git push
+          echo '--- landed ---'
+          git log --oneline -1
