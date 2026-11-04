@@ -11,6 +11,20 @@ Every run of the Android workflow produces four files: `MeasureT-<version>-debug
 `MeasureT-<version>-debug.aab`, `MeasureT-<version>.aab` (the Play upload) and — when the keystore
 secrets are set — `MeasureT-<version>.apk`.
 
+## 1.2.0 — 2026-11-04 — a Currency tab
+
+### Added
+- A **Currency** tab, the seventh, between Convert and Settings: an amount, two currencies and the
+  day's rate, the reverse rate underneath, and ⇅ to swap the pair.
+- Rates from a public feed that needs no key and no account — `open.er-api.com` — with the European
+  Central Bank's own feed as the fallback when that one is down.
+- The answer is written to `localStorage`, so the tab keeps converting with no connection and says
+  which day's rates are on screen; the picker offers only the currencies the saved rates can convert.
+
+### Changed
+- Nothing else — the converter, GPS measuring, the AR range finder, the compass, permissions and
+  updates are exactly as they were.
+
 ## 1.1.2 — 2026-11-03 — MeasureT can be thanked, in Settings
 
 ### Added
