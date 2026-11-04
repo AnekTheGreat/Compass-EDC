@@ -6,9 +6,13 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.1.2';
+var APP_VERSION = '1.1.3';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.1.3', date: 'November 4, 2026', title: 'The AR camera stops when you leave it', items: [
+    'Leaving the Measure half of the Convert tab &mdash; by tapping another tab, or by switching back to Convert &mdash; now ends the AR camera. Before this, the camera kept streaming and the live distance kept updating in the background, and only the <b>Stop</b> button could turn it off.',
+    'Nothing else changed &mdash; the converter, GPS measuring, the compass, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.1.2', date: 'November 3, 2026', title: 'MeasureT can be thanked, in Settings', items: [
     'A <b>Support</b> group now sits in Settings, above the version line: five amounts, each one an ordinary Stripe payment page opened in the browser. Nothing unlocks and nothing is sent from the app — a tip is a thank you, and the app is the same either way.',
     'Nothing else changed — the converter, GPS measuring, the AR range finder, the compass, permissions and updates are exactly as they were.'
@@ -89,6 +93,10 @@ document.querySelectorAll('nav button').forEach(function(btn){
     document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
     btn.classList.add('active');
     $(btn.dataset.screen).classList.add('active');
+    // The AR camera belongs to the Measure half of this tab, so a tab change ends it. Before
+    // this, the stream and its 120 ms report timer kept running with only Stop able to end
+    // them, which left a camera on in the background after a single tap on another tab.
+    if (btn.dataset.screen !== 'convert-screen' && arActive) stopAR();
     // The Convert tab always lands on the converter. That screen carries a Convert / Measure
     // switch of its own, so a tab tap that left the screen on Measure looked like a tap that
     // did nothing at all.
@@ -746,6 +754,10 @@ function pinCovSwitch(){
 }
 function setCovMode(m){
   var isC = m === 'convert';
+  // The camera belongs to the Measure half: switching to Convert ends it rather than
+  // leaving it on behind a screen that cannot show it. stopAR is hoisted, and arActive is
+  // still undefined during the startup calls this runs from, so neither can throw here.
+  if (isC && arActive) stopAR();
   $('cov-mode-convert').classList.toggle('on', isC);
   $('cov-mode-measure').classList.toggle('on', !isC);
   $('cov-convert-view').style.display = isC ? '' : 'none';
