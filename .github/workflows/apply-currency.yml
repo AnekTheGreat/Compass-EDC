@@ -1,0 +1,82 @@
+name: Apply the Currency tab
+
+# One-shot, dispatched by hand: applies dev/patch-currency.py to index.html and app.js,
+# stamps the release files from app.js with the repository's own tool, and then commits the
+# five real files and retires both helpers IN THE SAME COMMIT. The repository is left with
+# the change alone; there is no patch workflow to trigger twice.
+#
+# The patch script refuses to run unless every anchor it edits appears exactly once, so a
+# page that has drifted fails the run instead of being half-patched.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-currency
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply and commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply the patch
+        run: python3 dev/patch-currency.py
+
+      - name: Check the script still parses
+        run: node --check app.js
+
+      - name: Stamp updates.json, sw.js and package.json from app.js
+        run: node dev/ota.mjs
+
+      - name: Verify all four release copies agree
+        run: node dev/ota.mjs --check
+
+      # The five files this run is about to commit have known digests. If the patch produced
+      # even one byte different from what was tested, this fails here and nothing is committed.
+      - name: Verify the exact bytes that were tested
+        run: |
+          set -e
+          printf '%s  %s\n' \
+            'c30105ae5e1bd4332fc97972ce340ef6573c32787f9078a391616b1eff8df744' index.html \
+            'ca50db09b9aaaae5c86cec02f022d3adbf2d69dee37687622b45ccbadd631f2d' app.js \
+            'c64fc57df7f712cd5ab144ab5ca880d6aeaf569403ac7a87051d8d98658a9df7' updates.json \
+            'ca561289b0d0e024dfd7c8c4c6ecf82b990195bc23010baecbb5b5708b062dc7' sw.js \
+            'f5c8bc6cae91cb5de4aca07abbbc5fae546cca92db5829f99a4c661bb78841ec' package.json \
+            | sha256sum -c -
+
+      - name: Commit the page and retire the helper
+        run: |
+          set -e
+          git config user.name "MeasureT release"
+          git config user.email "actions@github.com"
+          git rm -q .github/workflows/apply-currency.yml dev/patch-currency.py
+          git add index.html app.js updates.json sw.js package.json
+          git commit -m "MeasureT 1.2.0: a Currency tab, converting at the day's saved rate
+
+          A seventh tab sits between Convert and Settings: an amount, two currencies and the
+          day's rate, with the reverse rate underneath and a swap button. The rates come from a
+          public feed that needs no key and are written to localStorage, so the tab keeps
+          converting with no connection and says which day's rates are on screen; the ECB's own
+          feed is used when the first one is down.
+
+          🤖 Generated with Codebuff
+          Co-Authored-By: Codebuff <noreply@codebuff.com>"
+          git push origin HEAD:main
+
+      - name: Show what landed
+        run: git log --oneline -2 && git show --stat --oneline HEAD
