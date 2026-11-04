@@ -6,9 +6,14 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.1.3';
+var APP_VERSION = '1.2.0';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.2.0', date: 'November 4, 2026', title: 'A Currency tab, with the day&rsquo;s exchange rate', items: [
+    'A <b>Currency</b> tab now sits between Convert and Settings. Type an amount, pick the two currencies, and it converts at the day&rsquo;s rate; the reverse rate is printed underneath, and the &#8645; button swaps the pair.',
+    'The rates come from a public feed that needs no sign-in, and every answer is saved on the phone &mdash; so the tab keeps converting on a plane or with no signal, and says which day&rsquo;s rates you are looking at.',
+    'Nothing else changed &mdash; the converter, GPS measuring, the AR range finder, the compass, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.1.3', date: 'November 4, 2026', title: 'The AR camera stops when you leave it', items: [
     'Leaving the Measure half of the Convert tab &mdash; by tapping another tab, or by switching back to Convert &mdash; now ends the AR camera. Before this, the camera kept streaming and the live distance kept updating in the background, and only the <b>Stop</b> button could turn it off.',
     'Nothing else changed &mdash; the converter, GPS measuring, the compass, permissions and updates are exactly as they were.'
@@ -101,6 +106,9 @@ document.querySelectorAll('nav button').forEach(function(btn){
     // switch of its own, so a tab tap that left the screen on Measure looked like a tap that
     // did nothing at all.
     if (btn.dataset.screen === 'convert-screen') setCovMode('convert');
+    // The currency tab asks for a fresh rate the first time it is opened, not on every
+    // start: nothing on this screen is needed by the compass or the level.
+    if (btn.dataset.screen === 'currency-screen') curOnOpen();
     if ($(btn.dataset.screen)) $(btn.dataset.screen).scrollTop = 0;
   });
 });
@@ -954,6 +962,209 @@ window.addEventListener('resize', drawElevGraph);
 setInterval(function(){
   if ($('elevation-screen').classList.contains('active')) drawElevGraph();
 }, 3000);
+
+// ---------- CURRENCY ----------
+// A tab of its own: an amount, two currencies and the day's rate. The rate comes from public
+// feeds that need no key, so there is no account and no secret inside the app, and every
+// answer is written to localStorage - which is what makes the tab work with no connection.
+// The network is asked again only when what is saved has gone a few hours old.
+var CUR_TTL = 6 * 60 * 60 * 1000;
+var CUR_KEY = 'cedc_rates';
+var CUR_FEEDS = [
+  { name: 'exchangerate-api.com', url: 'https://open.er-api.com/v6/latest/USD', read: function(j){
+      if (!j || j.result !== 'success' || !j.rates) return null;
+      return { date: j.time_last_update_utc, rates: j.rates };
+    } },
+  // The European Central Bank's own rates, for when the first feed is down. It carries a
+  // narrower list of currencies, and omits the base one, which is why USD is put back here.
+  { name: 'the European Central Bank', url: 'https://api.frankfurter.dev/v1/latest?from=USD', read: function(j){
+      if (!j || !j.rates) return null;
+      var r = {};
+      for (var k in j.rates) { if (Object.prototype.hasOwnProperty.call(j.rates, k)) r[k] = j.rates[k]; }
+      r[j.base || 'USD'] = 1;
+      return { date: j.date, rates: r };
+    } }
+];
+var CUR_NAMES = {
+  USD:'US Dollar', EUR:'Euro', GBP:'British Pound', JPY:'Japanese Yen', CNY:'Chinese Yuan',
+  INR:'Indian Rupee', PKR:'Pakistani Rupee', BDT:'Bangladeshi Taka', LKR:'Sri Lankan Rupee',
+  NPR:'Nepalese Rupee', AED:'UAE Dirham', SAR:'Saudi Riyal', QAR:'Qatari Riyal',
+  KWD:'Kuwaiti Dinar', BHD:'Bahraini Dinar', OMR:'Omani Rial', JOD:'Jordanian Dinar',
+  ILS:'Israeli Shekel', TRY:'Turkish Lira', RUB:'Russian Ruble', UAH:'Ukrainian Hryvnia',
+  PLN:'Polish Zloty', CZK:'Czech Koruna', HUF:'Hungarian Forint', RON:'Romanian Leu',
+  BGN:'Bulgarian Lev', SEK:'Swedish Krona', NOK:'Norwegian Krone', DKK:'Danish Krone',
+  CHF:'Swiss Franc', ISK:'Icelandic Krona', CAD:'Canadian Dollar', AUD:'Australian Dollar',
+  NZD:'New Zealand Dollar', MXN:'Mexican Peso', BRL:'Brazilian Real', ARS:'Argentine Peso',
+  CLP:'Chilean Peso', COP:'Colombian Peso', PEN:'Peruvian Sol', ZAR:'South African Rand',
+  NGN:'Nigerian Naira', KES:'Kenyan Shilling', GHS:'Ghanaian Cedi', EGP:'Egyptian Pound',
+  MAD:'Moroccan Dirham', TND:'Tunisian Dinar', HKD:'Hong Kong Dollar', SGD:'Singapore Dollar',
+  MYR:'Malaysian Ringgit', IDR:'Indonesian Rupiah', THB:'Thai Baht', PHP:'Philippine Peso',
+  VND:'Vietnamese Dong', KRW:'South Korean Won', TWD:'New Taiwan Dollar'
+};
+var curRates = null, curBusy = false;
+
+function curLoadCache(){
+  try {
+    var o = JSON.parse(storeGet(CUR_KEY) || 'null');
+    if (!o || !o.rates || !o.rates.USD) return null;
+    return o;
+  } catch (e) { return null; }
+}
+function curFresh(){ return !!(curRates && curRates.at && (Date.now() - curRates.at) < CUR_TTL); }
+function curDate(d){
+  if (!d) return '';
+  var t = null;
+  if (typeof d === 'number') t = new Date(d);
+  else if (typeof d === 'string') {
+    var m = d.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) t = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    else { var p = new Date(d); if (!isNaN(p.getTime())) t = p; }
+  }
+  if (!t || isNaN(t.getTime())) return String(d);
+  return t.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function curMoney(n){
+  if (!isFinite(n)) return '--';
+  var a = Math.abs(n);
+  if (a !== 0 && a < 0.01) return n.toFixed(4);
+  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function curRateFmt(n){
+  if (!isFinite(n) || n <= 0) return '--';
+  if (n >= 1000) return n.toFixed(0);
+  if (n >= 1) return n.toFixed(4).replace(/\.?0+$/, '');
+  if (n >= 0.001) return n.toFixed(6).replace(/\.?0+$/, '');
+  return n.toPrecision(3);
+}
+function curLabel(c){ return CUR_NAMES[c] ? c + ' \u2014 ' + CUR_NAMES[c] : c; }
+function curCodes(){
+  var seen = {}, out = [];
+  function add(c){ if (c && !seen[c]) { seen[c] = 1; out.push(c); } }
+  // Once rates are on the phone, the picker offers exactly the currencies that can be
+  // converted - a currency the feed does not carry would only ever read "--".
+  if (curRates && curRates.rates) { for (var k in curRates.rates) add(k); }
+  else { for (var n in CUR_NAMES) add(n); }
+  out.sort();
+  return out;
+}
+function curFillSelects(){
+  var fromSel = $('cur-from'), toSel = $('cur-to');
+  if (!fromSel || !toSel) return;
+  var keptFrom = fromSel.value, keptTo = toSel.value;
+  var codes = curCodes();
+  [fromSel, toSel].forEach(function(sel){
+    sel.innerHTML = '';
+    codes.forEach(function(c){
+      var o = document.createElement('option');
+      o.value = c; o.textContent = curLabel(c);
+      sel.appendChild(o);
+    });
+  });
+  var wantFrom = keptFrom || storeGet('cedc_cur_from') || 'USD';
+  var wantTo = keptTo || storeGet('cedc_cur_to') || 'EUR';
+  if (codes.indexOf(wantFrom) < 0) wantFrom = codes.indexOf('USD') >= 0 ? 'USD' : codes[0];
+  if (codes.indexOf(wantTo) < 0 || wantTo === wantFrom) {
+    var alt = codes.filter(function(c){ return c !== wantFrom; });
+    wantTo = alt.indexOf('EUR') >= 0 ? 'EUR' : (alt[0] || wantFrom);
+  }
+  fromSel.value = wantFrom;
+  toSel.value = wantTo;
+}
+function curRate(){
+  var f = $('cur-from').value, t = $('cur-to').value;
+  if (!curRates || !curRates.rates) return null;
+  var rf = curRates.rates[f], rt = curRates.rates[t];
+  if (!rf || !rt) return null;
+  return { from: f, to: t, rate: rt / rf };
+}
+function curSetSource(txt){ var el = $('cur-source'); if (el) el.textContent = txt; }
+function curUpdate(){
+  if (!$('cur-result')) return;
+  var r = curRate();
+  var amount = parseFloat($('cur-value').value);
+  if (!r) {
+    $('cur-result').textContent = '--';
+    $('cur-rate-line').textContent = '--';
+    $('cur-rate-inverse').textContent = '';
+  } else {
+    $('cur-result').textContent = isNaN(amount) ? '--' : curMoney(amount * r.rate) + ' ' + r.to;
+    $('cur-rate-line').textContent = '1 ' + r.from + ' = ' + curRateFmt(r.rate) + ' ' + r.to;
+    $('cur-rate-inverse').textContent = '1 ' + r.to + ' = ' + curRateFmt(1 / r.rate) + ' ' + r.from;
+  }
+  var stale = !!curRates && !curFresh();
+  $('cur-badge').textContent = curRates ? (stale ? 'Saved' : 'Today') : '';
+  $('cur-badge').className = 'cur-badge' + (stale ? ' stale' : '');
+  $('cur-stamp').textContent = curRates ? curDate(curRates.date || curRates.at) : '';
+  if (r) { storeSet('cedc_cur_from', r.from); storeSet('cedc_cur_to', r.to); }
+  curSetSource(curRates
+    ? 'Rates from ' + (curRates.source || 'a public feed') + ', ' + curDate(curRates.date) + '. Daily reference rates, not what a bank charges.'
+    : 'No rates saved on this phone yet \u2014 this tab needs one connection to fill in.');
+}
+function curFetch(i){
+  if (i >= CUR_FEEDS.length) return Promise.reject(new Error('no feed answered'));
+  var feed = CUR_FEEDS[i];
+  return fetch(feed.url, { cache: 'no-store' }).then(function(res){
+    if (!res.ok) throw new Error('http ' + res.status);
+    return res.json();
+  }).then(function(j){
+    var got = feed.read(j);
+    if (!got || !got.rates || !got.rates.USD) throw new Error('no usable rates');
+    return { rates: got.rates, date: got.date || '', at: Date.now(), source: feed.name };
+  }).catch(function(){ return curFetch(i + 1); });
+}
+function curRefresh(manual){
+  var btn = $('cur-update');
+  if (curBusy) return;
+  if (typeof fetch !== 'function') {
+    curUpdate();
+    curSetSource('This phone cannot fetch rates. The tab converts using the rates saved on it.');
+    return;
+  }
+  curBusy = true;
+  if (btn) btn.textContent = 'Updating\u2026';
+  curSetSource('Updating rates\u2026');
+  curFetch(0).then(function(got){
+    curRates = got;
+    storeSet(CUR_KEY, JSON.stringify(got));
+    curFillSelects();
+    curUpdate();
+    if (manual && btn) { btn.textContent = 'Updated'; setTimeout(function(){ btn.textContent = 'Update rates'; }, 1500); }
+  }).catch(function(){
+    curUpdate();
+    curSetSource(curRates
+      ? 'No connection \u2014 showing the rates saved on ' + curDate(curRates.date) + '.'
+      : 'No connection, and no rates saved yet. Connect once and tap Update rates.');
+    if (btn) btn.textContent = 'Try again';
+  }).then(function(){ curBusy = false; });
+}
+function curOnOpen(){
+  if (!$('cur-result')) return;
+  if (!curRates || !curFresh()) curRefresh(false);
+}
+(function initCurrency(){
+  var fromSel = $('cur-from'), toSel = $('cur-to');
+  if (!fromSel || !toSel) return;
+  curRates = curLoadCache();
+  if ($('cur-value')) {
+    var saved = storeGet('cedc_cur_amount');
+    if (saved) $('cur-value').value = saved;
+    $('cur-value').addEventListener('input', function(){
+      storeSet('cedc_cur_amount', this.value);
+      curUpdate();
+    });
+  }
+  curFillSelects();
+  curUpdate();
+  fromSel.addEventListener('change', curUpdate);
+  toSel.addEventListener('change', curUpdate);
+  $('cur-swap').addEventListener('click', function(){
+    var f = fromSel.value;
+    fromSel.value = toSel.value;
+    toSel.value = f;
+    curUpdate();
+  });
+  $('cur-update').addEventListener('click', function(){ curRefresh(true); });
+})();
 
 // ---------- RELEASES / OTA ----------
 // The manifest is read straight from the published repo, wherever this page is running
