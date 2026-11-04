@@ -14,6 +14,12 @@ stopAR(). Stop still works, and the quick "measure a person" button still starts
 app.js is ~49 KB and has to land byte for byte, so this travels as a patch script with one
 anchor per edit. Every anchor is asserted; if the file has moved on, the run fails instead of
 writing something nobody reviewed. --check re-verifies the landed file without touching it.
+
+Idempotency: each edit is skipped on its own unique marker, NOT on the absence of its anchor.
+The new text for every edit contains the old anchor (the tab comment keeps its following
+line, setCovMode keeps its first line), so "old anchor still present" is not evidence that
+the edit is unapplied - the first version of this script went round twice and duplicated the
+stop. The marker is the inserted line itself, which appears exactly once when applied.
 """
 import sys
 import pathlib
@@ -60,19 +66,19 @@ COV_NEW = (
     "  if (isC && arActive) stopAR();"
 )
 
+# label, old anchor, new text, unique marker that proves this edit is already in place
 EDITS = [
-    ("APP_VERSION", VERSION_OLD, VERSION_NEW),
-    ("the head CHANGELOG entry", CHANGELOG_OLD, CHANGELOG_NEW),
-    ("the tab handler", NAV_OLD, NAV_NEW),
-    ("setCovMode", COV_OLD, COV_NEW),
+    ("APP_VERSION", VERSION_OLD, VERSION_NEW,
+     "var APP_VERSION = '1.1.3';"),
+    ("the head CHANGELOG entry", CHANGELOG_OLD, CHANGELOG_NEW,
+     "version: '1.1.3', date: 'November 4, 2026'"),
+    ("the tab handler", NAV_OLD, NAV_NEW,
+     "if (btn.dataset.screen !== 'convert-screen' && arActive) stopAR();"),
+    ("setCovMode", COV_OLD, COV_NEW,
+     "if (isC && arActive) stopAR();"),
 ]
 
-MARKERS = [
-    "var APP_VERSION = '1.1.3';",
-    "version: '1.1.3', date: 'November 4, 2026'",
-    "if (btn.dataset.screen !== 'convert-screen' && arActive) stopAR();",
-    "if (isC && arActive) stopAR();",
-]
+MARKERS = [m for _, _, _, m in EDITS]
 
 
 def main() -> int:
@@ -81,21 +87,27 @@ def main() -> int:
     src = APP.read_text()
 
     if "--check" in sys.argv:
-        missing = [m for m in MARKERS if m not in src]
-        if missing:
-            for m in missing:
-                print("MISSING: %s" % m)
-            sys.exit("FATAL: app.js does not carry the AR-stop fix")
-        # The old anchors must be gone, or the patch was applied to the wrong shape.
+        bad = []
+        for marker in MARKERS:
+            n = src.count(marker)
+            if n != 1:
+                bad.append("%d x %s" % (n, marker))
         if VERSION_OLD in src:
-            sys.exit("FATAL: APP_VERSION is still 1.1.2 next to a 1.1.3 marker")
-        print("app.js carries the AR-stop fix and says 1.1.3")
+            bad.append("APP_VERSION is still 1.1.2")
+        if bad:
+            for b in bad:
+                print("BAD: %s" % b)
+            sys.exit("FATAL: app.js does not carry exactly one copy of the AR-stop fix")
+        print("app.js carries exactly one copy of the AR-stop fix and says 1.1.3")
         return 0
 
-    for label, old, new in EDITS:
-        if new in src and old not in src:
+    for label, old, new, marker in EDITS:
+        if src.count(marker) == 1:
             print("already applied: %s" % label)
             continue
+        if src.count(marker) > 1:
+            sys.exit("FATAL: %s is already in %s %d times - refusing to add another"
+                     % (label, APP, src.count(marker)))
         n = src.count(old)
         if n != 1:
             sys.exit("FATAL: %s anchor found %d times in %s (expected 1)\n--- anchor ---\n%s"
@@ -104,9 +116,10 @@ def main() -> int:
         print("patched: %s" % label)
 
     APP.write_text(src)
-    missing = [m for m in MARKERS if m not in src]
-    if missing:
-        sys.exit("FATAL: patch wrote but markers are missing: %s" % missing)
+
+    bad = ["%d x %s" % (src.count(m), m) for m in MARKERS if src.count(m) != 1]
+    if bad:
+        sys.exit("FATAL: patch wrote but markers are wrong: %s" % bad)
     print("app.js written with the AR-stop fix at 1.1.3")
     return 0
 

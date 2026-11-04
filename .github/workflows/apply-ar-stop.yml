@@ -46,14 +46,25 @@ jobs:
           node dev/ota.mjs --check
           node -p "JSON.stringify(require('./updates.json'), null, 1)"
 
-      - name: Check app.js parses and carries both stops
+      - name: Check app.js parses and carries each stop exactly once
         run: |
           set -euo pipefail
           node --check app.js
-          grep -c "if (btn.dataset.screen !== 'convert-screen' && arActive) stopAR();" app.js
-          grep -c "if (isC && arActive) stopAR();" app.js
-          # The Stop button's own handler must survive the patch untouched.
-          grep -c "arActive ? stopAR() : startAR();" app.js
+          # Exactly once, not merely present: a duplicated stop is how a double-applied patch
+          # shows up, and a grep -c that only asks "non-zero" would wave it through.
+          check_one() {
+            n=$(grep -cF "$1" app.js || true)
+            echo "  $n x $1"
+            if [ "$n" != "1" ]; then
+              echo "::error::expected exactly 1 occurrence of: $1 (found $n)"
+              exit 1
+            fi
+          }
+          check_one "if (btn.dataset.screen !== 'convert-screen' && arActive) stopAR();"
+          check_one "if (isC && arActive) stopAR();"
+          check_one "arActive ? stopAR() : startAR();"
+          check_one "var APP_VERSION = '1.1.3';"
+          check_one "The AR camera belongs to the Measure half of this tab"
 
       - name: Commit and push
         run: |
