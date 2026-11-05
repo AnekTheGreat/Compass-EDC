@@ -6,9 +6,14 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.2.2';
+var APP_VERSION = '1.2.3';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.2.3', date: 'November 5, 2026', title: 'The other apps are on the Settings tab, and the build proves which key signed it', items: [
+    'Settings now ends with <b>More apps</b>: <b>UJournal</b>, <b>FamTM</b>, <b>My Hub</b> and <b>SideCut</b>, each with what it does and a <b>Get</b> button that opens its Play listing. MeasureT is the fourth app in the other apps&rsquo; own lists, and it was still being called Compass EDC there.',
+    'The <b>Android build</b> now checks the certificate on the release APK against MeasureT&rsquo;s upload certificate and <b>fails</b> if they differ. Before this it printed the certificate and passed whatever it found, so a keystore that Play would reject still produced files that looked ready to upload.',
+    'Nothing else changed &mdash; elevation, location, the level, the converter, currency, GPS measuring, the AR range finder, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.2.2', date: 'November 5, 2026', title: 'The Compass tab is gone, and the currency answer is easy to read', items: [
     'The <b>Compass</b> tab has been <b>removed</b>. It was the most complicated thing in the app, and the heading dial, its calibration banner, the marked bearing and the true-north switch went with it. MeasureT now has <b>six tabs</b> and opens on <b>Convert</b>.',
     'The <b>currency answer</b> could be cut off at the bottom of its card on a phone with larger text, which is why the number was hard to see. The card now grows to fit what is in it instead of being squeezed, the answer is <b>larger and darker</b>, and the labels above it are legible.',

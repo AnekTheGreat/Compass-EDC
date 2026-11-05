@@ -12,6 +12,13 @@ upload), `MeasureT-<version>-release.apk` (the same build, installable), and the
 `MeasureT-<version>-debug.apk` / `MeasureT-<version>-debug.aab`. The release pair is signed with
 the upload keystore, and the run fails rather than hand over an unsigned bundle.
 
+## 1.2.3 — November 5, 2026
+
+**The other apps are on the Settings tab, and the build proves which key signed it**
+
+- Settings ends with **More apps**: UJournal, FamTM, My Hub and SideCut, each with what it does and a **Get** button that opens its Play listing.
+- The Android build now checks the release APK's certificate against MeasureT's upload certificate and **fails** when they differ, instead of printing it and passing.
+
 ## 1.2.2 — November 5, 2026
 
 **The Compass tab is gone, and the currency answer is easy to read**
