@@ -12,6 +12,19 @@ upload), `MeasureT-<version>-release.apk` (the same build, installable), and the
 `MeasureT-<version>-debug.apk` / `MeasureT-<version>-debug.aab`. The release pair is signed with
 the upload keystore, and the run fails rather than hand over an unsigned bundle.
 
+## 1.2.2 — November 5, 2026
+
+**The Compass tab is gone, and the currency answer is easy to read**
+
+- The **Compass** tab has been **removed**. It was the most complicated thing in the app, and the
+  heading dial, its calibration banner, the marked bearing and the true-north switch went with it.
+  MeasureT now has **six tabs** and opens on **Convert**.
+- The **currency answer** could be cut off at the bottom of its card on a phone with larger text,
+  which is why the number was hard to see. The card now grows to fit what is in it instead of being
+  squeezed, the answer is **larger and darker**, and the labels above it are legible.
+- Nothing else changed — elevation, location, the level, the converter, GPS measuring, the AR range
+  finder, permissions and updates are exactly as they were.
+
 ## 1.2.1 — 2026-11-05 — type the currency
 
 ### Changed
