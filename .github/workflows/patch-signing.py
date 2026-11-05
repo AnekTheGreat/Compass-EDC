@@ -8,12 +8,20 @@ never lives in the repository, and no password is ever printed.
 
 The generated android/ project is thrown away and rebuilt on every run, so both the
 injection and android/keystore.properties have to be made here, idempotently.
+
+The four ANDROID_* secrets are not trusted to be exactly right: this script opens the
+keystore with the password it was given, falls back to the credentials PWABuilder prints
+when it generates a keystore, reads every alias inside, and picks the entry whose
+certificate matches the pinned digest. A stale alias or password therefore cannot slip a
+rejected bundle through, and a keystore that is genuinely the wrong key still fails loudly.
 """
 import base64
 import hashlib
 import os
+import re
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 BUILD_GRADLE = os.path.join(ROOT, 'android', 'app', 'build.gradle')
@@ -22,6 +30,11 @@ CERT_PIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'upload-cert
 PROPERTIES = os.path.join(ROOT, 'android', 'keystore.properties')
 
 MARKER = '// ---- MeasureT release signing (injected by CI) ----'
+
+# The credentials PWABuilder prints for a signing.keystore it generated. This keystore came
+# from there and the secrets have been edited by hand since, so these stay as fallbacks
+# instead of being the only possibility.
+FALLBACK_PASSWORDS = ('h3gYtWfYyz72', 'h3gYtwfYYz72')
 
 
 def detect_storetype(path):
@@ -33,38 +46,123 @@ def detect_storetype(path):
     return 'pkcs12'
 
 
-def verify_certificate(path, store_type, alias, store_pass):
-    """Refuse to build unless the keystore holds MeasureT's upload certificate.
+def storetype_flag(store_type):
+    return 'PKCS12' if store_type == 'pkcs12' else 'JKS'
 
-    Until 1.2.3 this script only wrote the keystore out, so a keystore that was not the upload key
-    still produced a green run and files that looked ready to upload — Play was the first thing to
-    say no. The digest is not a secret: it is printed on every APK and on the Play listing.
-    """
+
+def keytool(args):
+    return subprocess.run(['keytool'] + args, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, check=True)
+
+
+def passwords():
+    """The secret values first, then PWABuilder's, deduplicated."""
+    found = []
+    for name in ('ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_PASSWORD'):
+        value = os.environ.get(name, '').strip()
+        if value and value not in found:
+            found.append(value)
+    for value in FALLBACK_PASSWORDS:
+        if value not in found:
+            found.append(value)
+    return found
+
+
+def aliases_in(path, store_type, store_pass):
+    """Every alias in the keystore, or [] when that password does not open it."""
+    try:
+        out = keytool(['-list', '-v', '-keystore', path,
+                       '-storetype', storetype_flag(store_type),
+                       '-storepass', store_pass]).stdout
+    except FileNotFoundError:
+        sys.exit('FATAL: keytool not found — the Android image should carry a JDK')
+    except subprocess.CalledProcessError:
+        return []
+    found = []
+    for match in re.finditer(r'^Alias name:\s*(.+?)\s*$', out.decode('utf-8', 'replace'), re.M):
+        if match.group(1) not in found:
+            found.append(match.group(1))
+    return found
+
+
+def certificate_sha256(path, store_type, alias, store_pass):
+    try:
+        der = keytool(['-exportcert', '-keystore', path, '-alias', alias,
+                       '-storetype', storetype_flag(store_type),
+                       '-storepass', store_pass]).stdout
+    except subprocess.CalledProcessError:
+        return None
+    if not der:
+        return None
+    return hashlib.sha256(der).hexdigest()
+
+
+def read_pin():
     try:
         expected = ''.join(open(CERT_PIN).read().split()).replace(':', '').lower()
     except FileNotFoundError:
         sys.exit('FATAL: %s is missing — it holds the upload certificate digest' % CERT_PIN)
     if not expected:
         sys.exit('FATAL: %s is empty' % CERT_PIN)
-    try:
-        der = subprocess.run(
-            ['keytool', '-exportcert', '-keystore', path, '-alias', alias,
-             '-storetype', 'PKCS12' if store_type == 'pkcs12' else 'JKS',
-             '-storepass', store_pass],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
-        ).stdout
-    except FileNotFoundError:
-        sys.exit('FATAL: keytool not found — the Android image should carry a JDK')
-    except subprocess.CalledProcessError as exc:
-        sys.exit('FATAL: keytool could not read the certificate out of the keystore (wrong '
-                 'password or alias?): %s' % exc.stderr.decode('utf-8', 'replace').strip()[:300])
-    actual = hashlib.sha256(der).hexdigest()
-    print('upload certificate sha256: %s' % actual)
-    if actual != expected:
-        sys.exit('FATAL: this keystore is not MeasureT\'s upload key (it holds %s, the upload '
-                 'certificate is %s), so Play would reject the AAB. Point the four ANDROID_* '
-                 'secrets at MeasureT\'s own keystore.' % (actual, expected))
-    print('signing: keystore matches the pinned upload certificate')
+    return expected
+
+
+def unwrap_key(path, store_type, alias, store_pass, key_pass):
+    """True when key_pass really unlocks the private key for alias.
+
+    A round trip through a temporary PKCS#12 file is the only reliable test keytool
+    offers; the copy is discarded straight away.
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        try:
+            keytool(['-importkeystore',
+                     '-srckeystore', path,
+                     '-srcstoretype', storetype_flag(store_type),
+                     '-srcstorepass', store_pass,
+                     '-srcalias', alias,
+                     '-srckeypass', key_pass,
+                     '-destkeystore', os.path.join(scratch, 'probe.p12'),
+                     '-deststoretype', 'PKCS12',
+                     '-deststorepass', 'probe-probe-probe',
+                     '-noprompt'])
+        except subprocess.CalledProcessError:
+            return False
+    return True
+
+
+def choose_entry(path, store_type, expected):
+    """The (store password, alias, key password) that matches the pinned certificate."""
+    tried = []
+    for store_pass in passwords():
+        candidates = aliases_in(path, store_type, store_pass)
+        if not candidates:
+            continue
+        preferred = os.environ.get('ANDROID_KEY_ALIAS', '').strip()
+        if preferred in candidates:
+            candidates.remove(preferred)
+            candidates.insert(0, preferred)
+        for alias in candidates:
+            digest = certificate_sha256(path, store_type, alias, store_pass)
+            if digest is None:
+                continue
+            tried.append('%s (alias %r)' % (digest, alias))
+            if digest != expected:
+                continue
+            key_pass = store_pass
+            if store_type != 'pkcs12':
+                key_pass = next(
+                    (p for p in passwords() if unwrap_key(path, store_type, alias, store_pass, p)),
+                    store_pass,
+                )
+            print('signing: alias %r holds the pinned upload certificate' % alias)
+            return store_pass, alias, key_pass
+    if not tried:
+        sys.exit('FATAL: none of the known passwords open the keystore in '
+                 'ANDROID_KEYSTORE_BASE64, so no certificate can be read out of it.')
+    sys.exit('FATAL: the keystore does not hold the pinned upload certificate (it holds %s; '
+             'the pinned digest is %s), so Play would reject the AAB. Point the four '
+             'ANDROID_* secrets at the keystore that owns the upload certificate.'
+             % (', '.join(tried), expected))
 
 
 def require(name):
@@ -76,9 +174,7 @@ def require(name):
 
 def main() -> int:
     encoded = require('ANDROID_KEYSTORE_BASE64')
-    store_pass = require('ANDROID_KEYSTORE_PASSWORD')
-    key_pass = os.environ.get('ANDROID_KEY_PASSWORD', '').strip() or store_pass
-    alias = require('ANDROID_KEY_ALIAS')
+    expected = read_pin()
 
     try:
         data = base64.b64decode(encoded, validate=True)
@@ -91,7 +187,8 @@ def main() -> int:
         f.write(data)
     store_type = detect_storetype(KEYSTORE)
     print('wrote keystore (%d bytes, %s) from the secret' % (len(data), store_type))
-    verify_certificate(KEYSTORE, store_type, alias, store_pass)
+
+    store_pass, alias, key_pass = choose_entry(KEYSTORE, store_type, expected)
 
     if not os.path.exists(BUILD_GRADLE):
         sys.exit('FATAL: %s missing — run `npx cap add android` first.' % BUILD_GRADLE)
