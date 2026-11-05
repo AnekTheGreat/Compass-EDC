@@ -1,10 +1,13 @@
 name: Apply the signing fix
 
 # One-shot: runs dev/ship.py, commits what it changes and pushes. Both files delete themselves.
+# It also watches this file, so a run can be started by touching the runner rather than the patch.
 on:
   push:
     branches: [main]
-    paths: ['dev/ship.py']
+    paths:
+      - 'dev/ship.py'
+      - '.github/workflows/apply-signing.yml'
 
 permissions:
   contents: write
