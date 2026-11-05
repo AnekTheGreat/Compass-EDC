@@ -84,48 +84,6 @@ body::before{
     0 2px 6px rgba(60,120,160,0.1);
 }
 
-/* ---------- COMPASS ---------- */
-#compass-screen{align-items:center;justify-content:flex-start;padding-top:8px;}
-.heading-big{
-  font-size:64px;font-weight:200;line-height:1;margin-top:6px;
-  font-variant-numeric:tabular-nums;letter-spacing:-1px;
-  color:var(--text);text-shadow:0 1px 0 rgba(255,255,255,0.6);
-}
-.heading-big sup{font-size:26px;font-weight:200;color:var(--dim);}
-.heading-label{font-size:14px;letter-spacing:4px;color:var(--dim);margin-top:2px;text-transform:uppercase;}
-.dial-wrap{
-  position:relative;width:290px;height:290px;margin:20px auto 6px;
-  border-radius:50%;
-}
-.dial-wrap .glass-disc{
-  position:absolute;inset:0;border-radius:50%;
-}
-.dial-wrap svg{width:100%;height:100%;display:block;position:relative;z-index:1;}
-.needle-tip{
-  position:absolute;top:-2px;left:50%;transform:translateX(-50%);z-index:2;
-  width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;
-  border-bottom:12px solid var(--accent);
-  filter:drop-shadow(0 2px 3px rgba(255,111,97,0.5));
-}
-.mode-row{display:flex;gap:10px;margin-top:10px;}
-.mode-pill{
-  font-size:11px;letter-spacing:1.5px;color:var(--dim);border:1px solid var(--glass-line);
-  padding:7px 16px;border-radius:20px;text-transform:uppercase;
-  background:var(--glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.8);
-}
-.mode-pill.on{color:#fff;background:linear-gradient(180deg, #5bb8f2, #2f8fd6);border-color:#2f8fd6;box-shadow:inset 0 1px 0 rgba(255,255,255,0.5), 0 3px 10px rgba(47,143,214,0.35);}
-.calib-banner{
-  margin-top:14px;font-size:12px;color:#8a5a12;border:1px solid rgba(224,152,58,0.4);
-  background:rgba(255,231,190,0.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  padding:9px 16px;border-radius:14px;display:none;text-align:center;
-}
-.calib-banner.show{display:block;}
-.stat-row{display:flex;width:100%;max-width:320px;justify-content:space-between;margin-top:22px;padding:12px 10px;border-radius:18px;}
-.stat{text-align:center;flex:1;}
-.stat .v{font-size:18px;font-weight:500;font-variant-numeric:tabular-nums;color:var(--text);}
-.stat .l{font-size:10px;color:var(--dim);letter-spacing:1.5px;margin-top:3px;text-transform:uppercase;}
-
 /* ---------- ELEVATION ---------- */
 .big-elev{text-align:center;margin-top:18px;}
 .big-elev .v{font-size:56px;font-weight:200;font-variant-numeric:tabular-nums;letter-spacing:-1px;color:var(--text);}
@@ -221,22 +179,13 @@ body::before{
 .btn-ar-overlay{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);padding:10px 22px;border:none;border-radius:22px;font-size:13px;letter-spacing:1px;color:#fff;background:rgba(20,40,55,0.78);border:1px solid rgba(255,255,255,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
 #ar-status{font-size:11px;color:var(--amber);margin-top:8px;line-height:1.5;}
 
-.hh-quick{
-  margin-top:14px;width:100%;max-width:320px;display:flex;flex-direction:column;gap:2px;
-  padding:14px 18px;border:none;border-radius:18px;text-align:left;cursor:pointer;
-  color:#fff;background:linear-gradient(180deg,#5bb8f2,#2f8fd6);border:1px solid #2f8fd6;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,0.4), 0 6px 16px rgba(47,143,214,0.35);
-}
-.hh-quick .hh-label{font-size:14px;font-weight:600;letter-spacing:0.5px;}
-.hh-quick .hh-sub{font-size:11px;opacity:0.9;margin-top:2px;}
-
 /* ---------- CURRENCY ---------- */
 /* One glowing card holds the amount, the pair and the answer, so the tab reads as a single
    instrument instead of four stacked boxes. Two slow colour washes drift behind the glass;
    they are decoration only and stop for anyone who asks the phone for less motion. */
 .cur-stamp{font-size:11px;color:var(--dim);letter-spacing:0.5px;}
 .cur-hero{
-  position:relative;overflow:hidden;border-radius:26px;padding:16px 16px 18px;
+  position:relative;overflow:hidden;flex:0 0 auto;border-radius:26px;padding:16px 16px 20px;
   background:linear-gradient(160deg, rgba(255,255,255,0.66), rgba(255,255,255,0.3));
   border:1px solid rgba(255,255,255,0.72);
   backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
@@ -258,7 +207,7 @@ body::before{
   to{transform:translate3d(20px,14px,0) scale(1.14);}
 }
 .cur-hero > *{position:relative;}
-.cur-amount-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dimmer);}
+.cur-amount-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);}
 .cur-amount-row{
   display:flex;align-items:center;gap:10px;margin-top:2px;
   border-bottom:1.5px solid rgba(14,51,80,0.12);transition:border-color .2s ease;
@@ -285,6 +234,7 @@ body::before{
   color:#fff;background:linear-gradient(180deg,#5bb8f2,#2f8fd6);border-color:#2f8fd6;
   box-shadow:0 4px 12px rgba(47,143,214,0.3);
 }
+#currency-screen > .cur-hero,#currency-screen > .card,#currency-screen > .cov-actions{flex:0 0 auto;}
 .cur-pickers{display:grid;grid-template-columns:1fr 44px 1fr;align-items:center;gap:8px;margin-top:14px;}
 .cur-pick{
   display:flex;flex-direction:column;align-items:flex-start;gap:0;min-width:0;
@@ -306,25 +256,25 @@ body::before{
 .cur-swap.spin{transform:rotate(180deg);}
 .cur-result-wrap{margin-top:16px;text-align:center;}
 .cur-result{
-  font-size:40px;font-weight:300;line-height:1.15;letter-spacing:-1px;color:var(--text);
+  font-size:46px;font-weight:500;line-height:1.18;letter-spacing:-0.5px;color:#0b3f63;
   font-variant-numeric:tabular-nums;transition:transform .16s ease;
 }
 .cur-result.pop{transform:scale(1.05);}
 @supports ((-webkit-background-clip:text) or (background-clip:text)){
   .cur-result{
-    background:linear-gradient(90deg,#1a6da9,#12805a);
+    background:linear-gradient(90deg,#0b4a7d,#0c6b48);
     -webkit-background-clip:text;background-clip:text;color:transparent;
   }
 }
-.cur-result-sub{font-size:11px;color:var(--dim);margin-top:4px;letter-spacing:0.3px;min-height:14px;}
+.cur-result-sub{font-size:12px;color:var(--dim);margin-top:6px;letter-spacing:0.3px;min-height:15px;}
 .cur-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
 .cur-badge{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--accent2);}
 .cur-badge.stale{color:var(--amber);}
 .cur-rate-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:8px 0;}
 .cur-rate-row + .cur-rate-row{border-top:1px solid rgba(255,255,255,0.6);}
-.cur-rate-row .k{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dimmer);}
-.cur-rate-row .v{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;text-align:right;}
-.cur-note{font-size:12px;line-height:1.6;color:var(--dim);margin-top:10px;}
+.cur-rate-row .k{font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);}
+.cur-rate-row .v{font-size:14px;font-weight:500;color:var(--text);font-variant-numeric:tabular-nums;text-align:right;}
+.cur-note{font-size:12.5px;line-height:1.6;color:var(--dim);margin-top:10px;}
 
 /* The picker sheet: a currency list you can type into. */
 .cur-sheet{
@@ -401,48 +351,6 @@ nav .navlabel{
 </head>
 <body>
 <div id="app">
-
-  <!-- COMPASS -->
-  <section class="screen active" id="compass-screen">
-    <div class="topbar">
-      <span class="title">Compass</span>
-      <span class="dim" style="font-size:11px;color:var(--dim)" id="accuracy-tag">&nbsp;</span>
-    </div>
-    <div class="heading-big"><span id="heading-num">--</span><sup>°</sup></div>
-    <div class="heading-label" id="heading-cardinal">-</div>
-
-    <div class="dial-wrap">
-      <div class="glass-disc glass"></div>
-      <div class="needle-tip"></div>
-      <svg viewBox="0 0 300 300" id="dial-svg">
-        <g id="dial-rotate">
-          <circle cx="150" cy="150" r="140" fill="none" stroke="rgba(14,51,80,0.15)" stroke-width="1"/>
-          <g id="ticks"></g>
-          <g id="dial-labels" font-family="-apple-system,sans-serif" text-anchor="middle" font-size="16" fill="#0e3350"></g>
-        </g>
-        <circle cx="150" cy="150" r="4" fill="#ff6f61"/>
-        <circle cx="150" cy="150" r="7" fill="none" stroke="#ff6f61" stroke-width="1" opacity="0.4"/>
-      </svg>
-    </div>
-
-    <div class="mode-row">
-      <div class="mode-pill on" id="mode-magnetic">Magnetic</div>
-      <div class="mode-pill" id="mode-true">True north</div>
-    </div>
-
-    <div class="calib-banner" id="calib-banner">Move phone in a figure-8 to calibrate</div>
-
-    <div class="stat-row glass">
-      <div class="stat"><div class="v" id="stat-tilt">0°</div><div class="l">Tilt</div></div>
-      <div class="stat"><div class="v" id="stat-declination">0°</div><div class="l">Declination</div></div>
-      <div class="stat"><div class="v" id="stat-bearing">--</div><div class="l">Marked bearing</div></div>
-    </div>
-
-    <button class="hh-quick" id="btn-hh-quick">
-      <span class="hh-label">Measure a person's height</span>
-      <span class="hh-sub">Point the camera at their feet &amp; head</span>
-    </button>
-  </section>
 
   <!-- ELEVATION -->
   <section class="screen" id="elevation-screen">
@@ -523,7 +431,7 @@ nav .navlabel{
   </section>
 
   <!-- TOOLS / CONVERT -->
-  <section class="screen" id="convert-screen">
+  <section class="screen active" id="convert-screen">
     <div class="topbar"><span class="title">Convert</span><span></span></div>
 
     <div class="seg" style="margin-top:6px;">
@@ -739,11 +647,7 @@ nav .navlabel{
     </div>
 
     <div class="set-group glass">
-      <div class="set-group-title">Compass</div>
-      <div class="set-row">
-        <div><div class="label">Reference north</div><div class="sub">Use true north instead of magnetic</div></div>
-        <div class="toggle" id="toggle-truenorth"></div>
-      </div>
+      <div class="set-group-title">Display</div>
       <div class="set-row">
         <div><div class="label">Keep screen on</div><div class="sub">Prevent sleep while app is open</div></div>
         <div class="toggle" id="toggle-wakelock"></div>
@@ -781,10 +685,6 @@ nav .navlabel{
   </section>
 
   <nav>
-    <button class="active" data-screen="compass-screen">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9.5"/><path d="M15 9l-2 5-5 2 2-5 5-2z" fill="currentColor" stroke="none" fill-opacity="0.9"/></svg>
-      <span class="navlabel">Compass</span>
-    </button>
     <button data-screen="elevation-screen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 18l5-9 4 6 3-5 6 8H3z"/></svg>
       <span class="navlabel">Elevation</span>
@@ -797,7 +697,7 @@ nav .navlabel{
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="10" width="19" height="4" rx="2"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>
       <span class="navlabel">Level</span>
     </button>
-    <button data-screen="convert-screen">
+    <button class="active" data-screen="convert-screen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 5L4 8l3 3M4 8h13M17 19l3-3-3-3M20 16H7"/></svg>
       <span class="navlabel">Convert</span>
     </button>
