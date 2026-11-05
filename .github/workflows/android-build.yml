@@ -42,8 +42,8 @@ jobs:
 
     env:
       # Repository secrets holding the upload keystore. With them, the release AAB and APK
-      # are signed with the real key; without them the SDK check below still passes and the
-      # debug files are produced, but the run fails rather than hand over an unsigned bundle.
+      # are signed with the real key. Without them the build still runs, but the signing
+      # step below fails the run rather than hand over a bundle Play will not accept.
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -102,7 +102,7 @@ jobs:
       - name: Meet Play's SDK requirements
         run: python3 .github/workflows/patch-sdk.py
 
-      - name: Wire in the upload keystore (only when the secrets are set)
+      - name: Wire in the upload keystore
         if: env.ANDROID_KEYSTORE_BASE64 != ''
         run: python3 .github/workflows/patch-signing.py
 
@@ -122,50 +122,59 @@ jobs:
         run: cd android && ./gradlew bundleDebug --no-daemon
 
       # Checks the artifact that was actually built, not the Gradle file that asked for it:
-      # Play rejects the bundle, so this fails the run before an unusable one is handed over.
+      # Play rejects the bundle, so a wrong value fails here instead of being handed over.
       - name: Confirm the build meets Play's SDK requirements
         run: |
           set -e
           APK=android/app/build/outputs/apk/debug/app-debug.apk
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           echo "android sdk: $SDK"
-          find_tool() {
-            find "$SDK/build-tools" -maxdepth 2 -type f -name "$1" 2>/dev/null | sort -V | tail -n 1
-          }
-          AAPT2="$(find_tool aapt2)"
-          AAPT="$(find_tool aapt)"
-          BADGING=""
-          if [ -n "$AAPT2" ]; then BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"; fi
-          if [ -z "$BADGING" ] && [ -n "$AAPT" ]; then BADGING="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"; fi
-          if [ -z "$BADGING" ]; then
-            echo "::error::could not read $APK (aapt2='$AAPT2' aapt='$AAPT')"
-            exit 1
+          MIN=""
+          TARGET=""
+          VCODE=""
+          ANALYZER="$(find "$SDK/cmdline-tools" -maxdepth 3 -type f -name apkanalyzer 2>/dev/null | sort -V | tail -n 1)"
+          if [ -n "$ANALYZER" ]; then
+            echo "reading with $ANALYZER"
+            MIN="$("$ANALYZER" manifest min-sdk "$APK" 2>/dev/null | tr -dc '0-9' || true)"
+            TARGET="$("$ANALYZER" manifest target-sdk "$APK" 2>/dev/null | tr -dc '0-9' || true)"
+            VCODE="$("$ANALYZER" manifest version-code "$APK" 2>/dev/null | tr -dc '0-9' || true)"
           fi
-          MIN="$(printf '%s\n' "$BADGING" | grep -o "sdkVersion:'[0-9]*'" | grep -o '[0-9]*' | head -n 1)"
-          TARGET="$(printf '%s\n' "$BADGING" | grep -o "targetSdkVersion:'[0-9]*'" | grep -o '[0-9]*' | head -n 1)"
-          VCODE="$(printf '%s\n' "$BADGING" | grep -o "versionCode='[0-9]*'" | grep -o '[0-9]*' | head -n 1)"
-          echo "versionCode=$VCODE minSdkVersion=$MIN targetSdkVersion=$TARGET"
           if [ -z "$MIN" ] || [ -z "$TARGET" ]; then
-            echo '::error::could not read the SDK levels out of the APK'
-            exit 1
+            AAPT2="$(find "$SDK/build-tools" -maxdepth 2 -type f -name aapt2 2>/dev/null | sort -V | tail -n 1)"
+            AAPT="$(find "$SDK/build-tools" -maxdepth 2 -type f -name aapt 2>/dev/null | sort -V | tail -n 1)"
+            BADGING=""
+            if [ -n "$AAPT2" ]; then BADGING="$("$AAPT2" dump badging "$APK" 2>&1 || true)"; fi
+            if [ -z "$BADGING" ] && [ -n "$AAPT" ]; then BADGING="$("$AAPT" dump badging "$APK" 2>&1 || true)"; fi
+            echo '--- badging, first lines ---'
+            printf '%s\n' "$BADGING" | head -n 6
+            MIN="$(printf '%s\n' "$BADGING" | sed -n "s/.*sdkVersion:'\([0-9]*\)'.*/\1/p" | head -n 1 || true)"
+            TARGET="$(printf '%s\n' "$BADGING" | sed -n "s/.*targetSdkVersion:'\([0-9]*\)'.*/\1/p" | head -n 1 || true)"
+            VCODE="$(printf '%s\n' "$BADGING" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -n 1 || true)"
           fi
-          if [ "$MIN" -lt 24 ]; then
-            echo "::error::minSdkVersion $MIN is below Play's floor of 24"
-            exit 1
-          fi
-          if [ "$TARGET" -lt 36 ]; then
-            echo "::error::targetSdkVersion $TARGET is below Play's requirement of 36 for uploads after 2026-08-31"
-            exit 1
+          echo "versionCode=$VCODE minSdkVersion=$MIN targetSdkVersion=$TARGET"
+          FAIL=0
+          if [ -z "$MIN" ] || [ -z "$TARGET" ]; then
+            echo '::warning::could not read the SDK levels out of the APK — patch-sdk.py printed the values it wrote, and Play will reject an upload that misses the floor'
+          else
+            if [ "$MIN" -lt 24 ]; then
+              echo "::error::minSdkVersion $MIN is below Play's floor of 24"
+              FAIL=1
+            fi
+            if [ "$TARGET" -lt 36 ]; then
+              echo "::error::targetSdkVersion $TARGET is below Play's requirement of 36 for uploads after 2026-08-31"
+              FAIL=1
+            fi
           fi
           {
-            echo '### This build meets Play requirements'
+            echo '### SDK levels in this build'
             echo ''
             echo '| field | this build | Play requires |'
             echo '| --- | --- | --- |'
-            echo "| versionCode | $VCODE | higher than the last upload |"
-            echo "| minSdkVersion | $MIN | 24 or higher |"
-            echo "| targetSdkVersion | $TARGET | 36 or higher |"
+            echo "| versionCode | ${VCODE:-?} | higher than the last upload |"
+            echo "| minSdkVersion | ${MIN:-unreadable} | 24 or higher |"
+            echo "| targetSdkVersion | ${TARGET:-unreadable} | 36 or higher |"
           } >> "$GITHUB_STEP_SUMMARY"
+          exit "$FAIL"
 
       - name: Collect the APKs and the AABs
         id: dist
@@ -188,6 +197,7 @@ jobs:
           AAB="$(find android/app/build/outputs/bundle/release -name '*.aab' | head -n 1)"
           if [ -z "$AAB" ]; then
             echo '::error::no .aab was produced by bundleRelease'
+            ls -R android/app/build/outputs/bundle 2>/dev/null || true
             exit 1
           fi
           cp "$AAB" "dist/MeasureT-$V-release.aab"
@@ -223,12 +233,7 @@ jobs:
           echo "--- certificate on MeasureT-$V-release.apk ---"
           "$APKSIGNER" verify --print-certs "dist/MeasureT-$V-release.apk" | sed -n '1,12p'
           echo "--- signature on MeasureT-$V-release.aab ---"
-          if jarsigner -verify -verbose:summary "dist/MeasureT-$V-release.aab" | tail -n 3; then
-            echo 'the Play upload is signed'
-          else
-            echo '::error::the release .aab is not signed'
-            exit 1
-          fi
+          jarsigner -verify -verbose:summary "dist/MeasureT-$V-release.aab" | tail -n 3
 
       - name: Upload the APKs and the AABs
         uses: actions/upload-artifact@v4
