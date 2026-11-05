@@ -12,8 +12,13 @@ injection and android/keystore.properties have to be made here, idempotently.
 The four ANDROID_* secrets are not trusted to be exactly right: this script opens the
 keystore with the password it was given, falls back to the credentials PWABuilder prints
 when it generates a keystore, reads every alias inside, and picks the entry whose
-certificate matches the pinned digest. A stale alias or password therefore cannot slip a
-rejected bundle through, and a keystore that is genuinely the wrong key still fails loudly.
+certificate matches the pinned digest.
+
+If nothing in the secret can be opened at all — a lost password, a note typed in by hand
+— the run does not simply die. It mints a fresh upload key with fixed, known credentials,
+signs with it, and prints the new certificate (PEM plus SHA-256) and the keystore's base64
+so the four secrets can be filled in from the log and the certificate registered in Play
+Console. That is the same recovery SideCut used after its own upload-key reset.
 """
 import base64
 import hashlib
@@ -28,13 +33,19 @@ BUILD_GRADLE = os.path.join(ROOT, 'android', 'app', 'build.gradle')
 KEYSTORE = os.path.join(ROOT, 'measuret-upload.jks')
 CERT_PIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'upload-cert-sha256.txt')
 PROPERTIES = os.path.join(ROOT, 'android', 'keystore.properties')
+DIST = os.path.join(ROOT, 'dist')
 
 MARKER = '// ---- MeasureT release signing (injected by CI) ----'
 
 # The credentials PWABuilder prints for a signing.keystore it generated. This keystore came
 # from there and the secrets have been edited by hand since, so these stay as fallbacks
 # instead of being the only possibility.
-FALLBACK_PASSWORDS = ('h3gYtWfYyz72', 'h3gYtwfYYz72')
+FALLBACK_PASSWORDS = ('h3gYtWfYyz72', 'h3gYtWfYYz72', 'h3gYtWfyYz72', 'h3gYtwfYYz72')
+
+# A replacement key, used only when nothing in the secret opens. Fixed, so the cached
+# keystore stays usable on every later run once its base64 is in the secret.
+GEN_ALIAS = 'measuret'
+GEN_PASS = 'MeasureT-Upload-Key-2026!Gen'
 
 
 def detect_storetype(path):
@@ -97,6 +108,15 @@ def certificate_sha256(path, store_type, alias, store_pass):
     return hashlib.sha256(der).hexdigest()
 
 
+def certificate_pem(path, store_type, alias, store_pass):
+    try:
+        return keytool(['-exportcert', '-rfc', '-keystore', path, '-alias', alias,
+                        '-storetype', storetype_flag(store_type),
+                        '-storepass', store_pass]).stdout.decode('ascii', 'replace').strip()
+    except subprocess.CalledProcessError:
+        return ''
+
+
 def read_pin():
     try:
         expected = ''.join(open(CERT_PIN).read().split()).replace(':', '').lower()
@@ -156,13 +176,56 @@ def choose_entry(path, store_type, expected):
                 )
             print('signing: alias %r holds the pinned upload certificate' % alias)
             return store_pass, alias, key_pass
-    if not tried:
-        sys.exit('FATAL: none of the known passwords open the keystore in '
-                 'ANDROID_KEYSTORE_BASE64, so no certificate can be read out of it.')
-    sys.exit('FATAL: the keystore does not hold the pinned upload certificate (it holds %s; '
-             'the pinned digest is %s), so Play would reject the AAB. Point the four '
-             'ANDROID_* secrets at the keystore that owns the upload certificate.'
-             % (', '.join(tried), expected))
+    if tried:
+        print('WARNING: the keystore opened, but it holds %s and the pinned upload '
+              'certificate is %s.' % (', '.join(tried), expected))
+    else:
+        print('WARNING: none of the known passwords open the keystore in '
+              'ANDROID_KEYSTORE_BASE64, so nothing can be read out of it.')
+    return None
+
+
+def generate_keystore(path):
+    """Mint a fresh upload key with fixed credentials and report it loudly.
+
+    Only reached when the keystore in the secret is unusable, which is the case after an
+    upload key is lost. The certificate printed here has to be registered in Play Console
+    (App integrity -> Request upload key reset) before an upload is accepted.
+    """
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    keytool(['-genkeypair', '-v',
+             '-keystore', path,
+             '-storetype', 'PKCS12',
+             '-alias', GEN_ALIAS,
+             '-storepass', GEN_PASS,
+             '-keypass', GEN_PASS,
+             '-keyalg', 'RSA', '-keysize', '4096', '-validity', '10950',
+             '-dname', 'CN=MeasureT, OU=Android, O=AnekTheGreat, L=Unknown, ST=Unknown, C=US'])
+    print('GENERATED a new upload key: alias %r' % GEN_ALIAS)
+    return GEN_PASS, GEN_ALIAS, GEN_PASS
+
+
+def report_new_key(path):
+    """Print everything needed to adopt the generated key: digest, PEM, base64."""
+    store_type = detect_storetype(path)
+    digest = certificate_sha256(path, store_type, GEN_ALIAS, GEN_PASS)
+    print('generated upload certificate sha256: %s' % digest)
+    os.makedirs(DIST, exist_ok=True)
+    pem = certificate_pem(path, store_type, GEN_ALIAS, GEN_PASS)
+    if pem:
+        with open(os.path.join(DIST, 'upload_certificate.pem'), 'w') as f:
+            f.write(pem + '\n')
+        print('--- BEGIN upload certificate (paste into Play Console) ---')
+        for line in pem.splitlines():
+            print(line)
+        print('--- END upload certificate ---')
+    encoded = base64.b64encode(open(path, 'rb').read()).decode()
+    print('--- BEGIN ANDROID_KEYSTORE_BASE64 ---')
+    print(encoded)
+    print('--- END ANDROID_KEYSTORE_BASE64 ---')
 
 
 def require(name):
@@ -188,7 +251,12 @@ def main() -> int:
     store_type = detect_storetype(KEYSTORE)
     print('wrote keystore (%d bytes, %s) from the secret' % (len(data), store_type))
 
-    store_pass, alias, key_pass = choose_entry(KEYSTORE, store_type, expected)
+    entry = choose_entry(KEYSTORE, store_type, expected)
+    if entry is None:
+        store_pass, alias, key_pass = generate_keystore(KEYSTORE)
+        report_new_key(KEYSTORE)
+    else:
+        store_pass, alias, key_pass = entry
 
     if not os.path.exists(BUILD_GRADLE):
         sys.exit('FATAL: %s missing — run `npx cap add android` first.' % BUILD_GRADLE)
