@@ -41,9 +41,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      # Optional repository secrets. With them, the release AAB/APK are signed with the
-      # real upload keystore. Without them the AABs are still produced (unsigned) and the
-      # debug APK is the installable file. Never printed, never committed.
+      # Repository secrets holding the upload keystore. With them, the release AAB and APK
+      # are signed with the real key; without them the SDK check below still passes and the
+      # debug files are produced, but the run fails rather than hand over an unsigned bundle.
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -109,7 +109,7 @@ jobs:
       - name: Build the release AAB (the Play upload)
         run: cd android && chmod +x gradlew && ./gradlew bundleRelease --no-daemon
 
-      - name: Build the signed release APK (only when the secrets are set)
+      - name: Build the signed release APK
         if: env.ANDROID_KEYSTORE_BASE64 != ''
         run: cd android && ./gradlew assembleRelease --no-daemon
 
@@ -127,18 +127,23 @@ jobs:
         run: |
           set -e
           APK=android/app/build/outputs/apk/debug/app-debug.apk
-          AAPT="$(find "${ANDROID_HOME}/build-tools" -name aapt2 -type f | sort -V | tail -n 1)"
-          if [ ! -x "$AAPT" ]; then
-            AAPT="$(find "${ANDROID_HOME}/build-tools" -name aapt -type f | sort -V | tail -n 1)"
-          fi
-          if [ ! -x "$AAPT" ]; then
-            echo "::error::no aapt2 or aapt under ${ANDROID_HOME}/build-tools"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "android sdk: $SDK"
+          find_tool() {
+            find "$SDK/build-tools" -maxdepth 2 -type f -name "$1" 2>/dev/null | sort -V | tail -n 1
+          }
+          AAPT2="$(find_tool aapt2)"
+          AAPT="$(find_tool aapt)"
+          BADGING=""
+          if [ -n "$AAPT2" ]; then BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"; fi
+          if [ -z "$BADGING" ] && [ -n "$AAPT" ]; then BADGING="$("$AAPT" dump badging "$APK" 2>/dev/null || true)"; fi
+          if [ -z "$BADGING" ]; then
+            echo "::error::could not read $APK (aapt2='$AAPT2' aapt='$AAPT')"
             exit 1
           fi
-          BADGING="$("$AAPT" dump badging "$APK")"
-          MIN="$(printf '%s\n' "$BADGING" | sed -n "s/^sdkVersion:'\([0-9]*\)'.*/\1/p" | head -n 1)"
-          TARGET="$(printf '%s\n' "$BADGING" | sed -n "s/^targetSdkVersion:'\([0-9]*\)'.*/\1/p" | head -n 1)"
-          VCODE="$(printf '%s\n' "$BADGING" | sed -n "s/^package:.*versionCode='\([0-9]*\)'.*/\1/p" | head -n 1)"
+          MIN="$(printf '%s\n' "$BADGING" | grep -o "sdkVersion:'[0-9]*'" | grep -o '[0-9]*' | head -n 1)"
+          TARGET="$(printf '%s\n' "$BADGING" | grep -o "targetSdkVersion:'[0-9]*'" | grep -o '[0-9]*' | head -n 1)"
+          VCODE="$(printf '%s\n' "$BADGING" | grep -o "versionCode='[0-9]*'" | grep -o '[0-9]*' | head -n 1)"
           echo "versionCode=$VCODE minSdkVersion=$MIN targetSdkVersion=$TARGET"
           if [ -z "$MIN" ] || [ -z "$TARGET" ]; then
             echo '::error::could not read the SDK levels out of the APK'
@@ -193,7 +198,7 @@ jobs:
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             echo 'signing: upload keystore in use'
           else
-            echo 'signing: no keystore secret set, so the AABs are UNSIGNED and the debug APK is the installable file'
+            echo 'signing: no keystore secret set, so the AAB is UNSIGNED'
           fi
           echo '--- dist ---'
           ls -l dist
@@ -204,20 +209,26 @@ jobs:
         run: |
           set -e
           V="${{ steps.dist.outputs.version }}"
-          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
-          if [ ! -x "$APKSIGNER" ]; then
-            echo '::error::apksigner not found under ${ANDROID_HOME}/build-tools'
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          APKSIGNER="$(find "$SDK/build-tools" -maxdepth 2 -type f -name apksigner 2>/dev/null | sort -V | tail -n 1)"
+          if [ ! -f "dist/MeasureT-$V-release.apk" ]; then
+            echo "::error::no signed release APK in dist — the ANDROID_KEYSTORE_BASE64 secret (and the three related ones) must be set for the Play upload to be signed"
+            ls -l dist
             exit 1
           fi
-          if [ ! -f "dist/MeasureT-$V-release.apk" ]; then
-            echo '::error::no signed release APK in dist — set ANDROID_KEYSTORE_BASE64 (and the three related secrets) so the Play upload is signed'
-            ls -l dist
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found under $SDK/build-tools"
             exit 1
           fi
           echo "--- certificate on MeasureT-$V-release.apk ---"
           "$APKSIGNER" verify --print-certs "dist/MeasureT-$V-release.apk" | sed -n '1,12p'
-          echo "--- certificate on MeasureT-$V-release.aab ---"
-          jarsigner -verify -verbose:summary "dist/MeasureT-$V-release.aab" | tail -n 3
+          echo "--- signature on MeasureT-$V-release.aab ---"
+          if jarsigner -verify -verbose:summary "dist/MeasureT-$V-release.aab" | tail -n 3; then
+            echo 'the Play upload is signed'
+          else
+            echo '::error::the release .aab is not signed'
+            exit 1
+          fi
 
       - name: Upload the APKs and the AABs
         uses: actions/upload-artifact@v4
