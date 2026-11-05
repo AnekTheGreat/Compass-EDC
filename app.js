@@ -6,9 +6,14 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.2.1';
+var APP_VERSION = '1.2.2';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.2.2', date: 'November 5, 2026', title: 'The Compass tab is gone, and the currency answer is easy to read', items: [
+    'The <b>Compass</b> tab has been <b>removed</b>. It was the most complicated thing in the app, and the heading dial, its calibration banner, the marked bearing and the true-north switch went with it. MeasureT now has <b>six tabs</b> and opens on <b>Convert</b>.',
+    'The <b>currency answer</b> could be cut off at the bottom of its card on a phone with larger text, which is why the number was hard to see. The card now grows to fit what is in it instead of being squeezed, the answer is <b>larger and darker</b>, and the labels above it are legible.',
+    'Nothing else changed &mdash; elevation, location, the level, the converter, GPS measuring, the AR range finder, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.2.1', date: 'November 5, 2026', title: 'Type the currency, and a Currency tab that is a pleasure to look at', items: [
     'The two currency buttons now open a <b>searchable list</b>: type <b>eur</b>, <b>euro</b> or <b>rupee</b> and it narrows to that currency, with the ones people reach for most at the top and a tick on the pair in use. Before this, picking from more than fifty currencies was a long scroll in a native dropdown.',
     'The amount is an obvious field now: <b>tap the big number and type</b>, or tap <b>10</b>, <b>50</b>, <b>100</b> or <b>500</b>, and the answer follows as you type, with the currency you are typing in shown right beside it.',
@@ -47,32 +52,13 @@ var CHANGELOG = [
 
 // ---------- STATE ----------
 var SMOOTH = 0.09;   // EMA alpha — lower = smoother (0.09 ≈ 110 ms time-constant)
-var DEAD_ZONE = 1.5; // hold the dial still unless the reading moves more than this (degrees)
-var rawHeading = null;
-var smoothHeading = null;
 var smoothPitch = 0, smoothRoll = 0;
 var rafPending = false;
 
-function angleDiff(a, b) {
-  var d = a - b;
-  return ((d + 540) % 360) - 180; // shortest arc, range (−180, 180]
-}
-function lerpAngle(prev, next, t) {
-  if (prev == null) return next;
-  var diff = angleDiff(next, prev);
-  return (prev + diff * t + 360) % 360;
-}
-
 var state = {
   unitSystem: localStorage.getItem('cedc_units') || 'metric', // 'metric' | 'imperial'
-  useTrueNorth: localStorage.getItem('cedc_truenorth') === '1',
   use24h: localStorage.getItem('cedc_24h') === '1', // 24-hour (military) time
   wakeLock: localStorage.getItem('cedc_wakelock') === '1',
-  heading: null,
-  headingAccuracy: null,
-  declination: 0,
-  tilt: 0,
-  markedBearing: null,
   lat: null, lon: null, gpsAccuracy: null, speed: null,
   altitude: null, altAccuracy: null,
   elevHistory: [], // {t, alt}
@@ -120,137 +106,26 @@ document.querySelectorAll('nav button').forEach(function(btn){
   });
 });
 
-// ---------- COMPASS DIAL BUILD ----------
-(function buildDial(){
-  var ticks = $('ticks');
-  var labels = $('dial-labels');
-  var cx = 150, cy = 150, rOuter = 140, rInnerMajor = 118, rInnerMinor = 128;
-  var dirs = [[0,'N'],[90,'E'],[180,'S'],[270,'W']];
-  for (var deg = 0; deg < 360; deg += 5) {
-    var major = deg % 30 === 0;
-    var rad = (deg - 90) * Math.PI / 180;
-    var rIn = major ? rInnerMajor : rInnerMinor;
-    var x1 = cx + rIn * Math.cos(rad), y1 = cy + rIn * Math.sin(rad);
-    var x2 = cx + rOuter * Math.cos(rad), y2 = cy + rOuter * Math.sin(rad);
-    var line = document.createElementNS('http://www.w3.org/2000/svg','line');
-    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-    line.setAttribute('stroke', deg === 0 ? '#ff6f61' : (major ? 'rgba(14,51,80,0.55)' : 'rgba(14,51,80,0.25)'));
-    line.setAttribute('stroke-width', major ? 2 : 1);
-    ticks.appendChild(line);
-  }
-  dirs.forEach(function(d){
-    var rad = (d[0] - 90) * Math.PI / 180;
-    var r = 100;
-    var x = cx + r * Math.cos(rad), y = cy + r * Math.sin(rad) + 6;
-    var t = document.createElementNS('http://www.w3.org/2000/svg','text');
-    t.setAttribute('x', x); t.setAttribute('y', y);
-    t.setAttribute('fill', d[1] === 'N' ? '#ff6f61' : '#0e3350');
-    t.setAttribute('font-weight', '600');
-    t.textContent = d[1];
-    labels.appendChild(t);
-  });
-})();
-
-function cardinal(deg){
-  var dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-  return dirs[Math.round(deg / 22.5) % 16];
-}
-
-// ---------- COMPASS ----------
-function updateCompassUI(){
-  if (smoothHeading == null) return;
-  var displayHeading = smoothHeading;
-  if (state.useTrueNorth) {
-    displayHeading = (displayHeading + state.declination + 360) % 360;
-  }
-  var rounded = Math.round(displayHeading);
-  $('heading-num').textContent = rounded;
-  $('heading-cardinal').textContent = cardinal(displayHeading);
-  $('dial-rotate').setAttribute('transform', 'rotate(' + (-displayHeading) + ' 150 150)');
-  $('stat-tilt').textContent = Math.round(state.tilt) + '°';
-  $('stat-declination').textContent = Math.round(state.declination) + '°';
-  $('stat-bearing').textContent = state.markedBearing != null ? Math.round(state.markedBearing) + '°' : '--';
-
-  if (state.headingAccuracy != null) {
-    if (state.headingAccuracy > 25) {
-      $('accuracy-tag').textContent = 'Low accuracy';
-      $('accuracy-tag').style.color = '#d9a441';
-      $('calib-banner').classList.add('show');
-    } else {
-      $('accuracy-tag').textContent = '';
-      $('calib-banner').classList.remove('show');
-    }
-  }
-}
-
-$('mode-magnetic').addEventListener('click', function(){
-  state.useTrueNorth = false;
-  localStorage.setItem('cedc_truenorth', '0');
-  $('mode-magnetic').classList.add('on');
-  $('mode-true').classList.remove('on');
-  $('toggle-truenorth').classList.remove('on');
-  updateCompassUI();
-});
-$('mode-true').addEventListener('click', function(){
-  state.useTrueNorth = true;
-  localStorage.setItem('cedc_truenorth', '1');
-  $('mode-true').classList.add('on');
-  $('mode-magnetic').classList.remove('on');
-  $('toggle-truenorth').classList.add('on');
-  updateCompassUI();
-});
-
-$('compass-screen').addEventListener('dblclick', function(){
-  state.markedBearing = state.useTrueNorth ? (state.heading + state.declination + 360) % 360 : state.heading;
-  updateCompassUI();
-});
-
 function scheduleUpdate(){
   if (rafPending) return;
   rafPending = true;
   requestAnimationFrame(function(){
     rafPending = false;
-    updateCompassUI();
     updateLevelUI();
   });
 }
 
 function handleOrientation(e){
-  var heading;
-  if (e.webkitCompassHeading != null) {
-    heading = e.webkitCompassHeading;
-    state.headingAccuracy = e.webkitCompassAccuracy;
-  } else if (e.alpha != null) {
-    heading = 360 - e.alpha;
-    state.headingAccuracy = null;
-  } else {
-    return;
-  }
-  rawHeading = (heading + 360) % 360;
-  state.heading = rawHeading;
-
-  // TRUE dead zone: if the raw reading is essentially where the dial
-  // already points, do NOTHING — hold it perfectly still. Only follow the
-  // sensor once it moves beyond the dead zone, then ease toward it.
-  if (smoothHeading == null || Math.abs(angleDiff(rawHeading, smoothHeading)) >= DEAD_ZONE) {
-    smoothHeading = lerpAngle(smoothHeading, rawHeading, SMOOTH);
-  }
-
-  state.tilt = e.beta != null ? Math.abs(e.beta) : 0;
-
-  // level tab — EMA smooth pitch/roll
+  // The Compass tab is gone, so this reads only the two angles the level (and the AR readings)
+  // use: pitch and roll, smoothed so the bubble does not jitter. No heading, no dead zone.
   if (e.beta != null && e.gamma != null) {
     var rawPitch = e.beta > 90 ? 180 - e.beta : (e.beta < -90 ? -180 - e.beta : e.beta);
-    var rawRoll = e.gamma;
     state.pitch = rawPitch;
-    state.roll = rawRoll;
-    // smooth (dead zone doesn't apply to level — continuous response is expected)
+    state.roll = e.gamma;
     smoothPitch += (rawPitch - smoothPitch) * SMOOTH;
-    smoothRoll  += (rawRoll  - smoothRoll)  * SMOOTH;
+    smoothRoll  += (state.roll - smoothRoll) * SMOOTH;
+    scheduleUpdate();
   }
-
-  scheduleUpdate();
 }
 
 // ---------- LEVEL ----------
@@ -415,12 +290,6 @@ function calcSunTimes(date, lat, lon){
   return { rise: fmt(rise), set: fmt(set) };
 }
 
-// magnetic declination approximation (rough, WMM-free): use a simple stored value or fetch-free est
-function estimateDeclination(lat, lon){
-  // extremely rough linear approximation for demo purposes; real apps use WMM tables
-  return 0;
-}
-
 // ---------- GEOLOCATION ----------
 // ASKED FOR ONCE, AND REMEMBERED. This used to call watchPosition the instant the app
 // started, on every single launch, so the OS location dialog landed on top of the app again
@@ -435,7 +304,6 @@ function onGeoPos(pos){
   state.lon = pos.coords.longitude;
   state.gpsAccuracy = pos.coords.accuracy;
   state.speed = pos.coords.speed;
-  state.declination = estimateDeclination(state.lat, state.lon);
   if (pos.coords.altitude != null) {
     ingestAltitude(pos.coords.altitude, pos.coords.altitudeAccuracy);
   }
@@ -526,15 +394,6 @@ $('unit-toggle-loc').addEventListener('click', function(){
   applyUnitSystem();
 });
 
-$('toggle-truenorth').addEventListener('click', function(){
-  state.useTrueNorth = !state.useTrueNorth;
-  localStorage.setItem('cedc_truenorth', state.useTrueNorth ? '1' : '0');
-  $('toggle-truenorth').classList.toggle('on', state.useTrueNorth);
-  $('mode-true').classList.toggle('on', state.useTrueNorth);
-  $('mode-magnetic').classList.toggle('on', !state.useTrueNorth);
-  updateCompassUI();
-});
-
 $('toggle-24h').addEventListener('click', function(){
   state.use24h = !state.use24h;
   localStorage.setItem('cedc_24h', state.use24h ? '1' : '0');
@@ -571,12 +430,8 @@ document.addEventListener('visibilitychange', function(){
 });
 
 // init settings UI from storage
-$('toggle-truenorth').classList.toggle('on', state.useTrueNorth);
 $('toggle-wakelock').classList.toggle('on', state.wakeLock);
 $('toggle-24h').classList.toggle('on', state.use24h);
-if (state.useTrueNorth) {
-  $('mode-true').classList.add('on'); $('mode-magnetic').classList.remove('on');
-}
 applyUnitSystem();
 applyWakeLock();
 
@@ -951,14 +806,6 @@ function setARMode(m){
 $('ar-mode-base').addEventListener('click', function(){ setARMode('base'); });
 $('ar-mode-height').addEventListener('click', function(){ setARMode('height'); });
 $('ar-mode-person').addEventListener('click', function(){ setARMode('person'); });
-
-// Quick button on the Compass screen -> jump straight into person-height AR
-$('btn-hh-quick').addEventListener('click', function(){
-  document.querySelector('nav button[data-screen="convert-screen"]').click();
-  setCovMode('measure');
-  setARMode('person');
-  if (!arActive) startAR();
-});
 
 buildCovChips();
 fillCovSelects();
