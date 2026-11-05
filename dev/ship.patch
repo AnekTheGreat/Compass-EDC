@@ -1,0 +1,120 @@
+diff --git a/.github/workflows/patch-signing.py b/.github/workflows/patch-signing.py
+index d3d018a..89b0fd1 100644
+--- a/.github/workflows/patch-signing.py
++++ b/.github/workflows/patch-signing.py
+@@ -12,0 +13 @@ import base64
++import hashlib
+@@ -13,0 +15 @@ import os
++import subprocess
+@@ -18,0 +21 @@ KEYSTORE = os.path.join(ROOT, 'measuret-upload.jks')
++CERT_PIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'upload-cert-sha256.txt')
+@@ -32,0 +36,34 @@ def detect_storetype(path):
++def verify_certificate(path, store_type, alias, store_pass):
++    """Refuse to build unless the keystore holds MeasureT's upload certificate.
++
++    Until 1.2.3 this script only wrote the keystore out, so a keystore that was not the upload key
++    still produced a green run and files that looked ready to upload — Play was the first thing to
++    say no. The digest is not a secret: it is printed on every APK and on the Play listing.
++    """
++    try:
++        expected = ''.join(open(CERT_PIN).read().split()).replace(':', '').lower()
++    except FileNotFoundError:
++        sys.exit('FATAL: %s is missing — it holds the upload certificate digest' % CERT_PIN)
++    if not expected:
++        sys.exit('FATAL: %s is empty' % CERT_PIN)
++    try:
++        der = subprocess.run(
++            ['keytool', '-exportcert', '-keystore', path, '-alias', alias,
++             '-storetype', 'PKCS12' if store_type == 'pkcs12' else 'JKS',
++             '-storepass', store_pass],
++            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
++        ).stdout
++    except FileNotFoundError:
++        sys.exit('FATAL: keytool not found — the Android image should carry a JDK')
++    except subprocess.CalledProcessError as exc:
++        sys.exit('FATAL: keytool could not read the certificate out of the keystore (wrong '
++                 'password or alias?): %s' % exc.stderr.decode('utf-8', 'replace').strip()[:300])
++    actual = hashlib.sha256(der).hexdigest()
++    print('upload certificate sha256: %s' % actual)
++    if actual != expected:
++        sys.exit('FATAL: this keystore is not MeasureT\'s upload key (it holds %s, the upload '
++                 'certificate is %s), so Play would reject the AAB. Point the four ANDROID_* '
++                 'secrets at MeasureT\'s own keystore.' % (actual, expected))
++    print('signing: keystore matches the pinned upload certificate')
++
++
+@@ -56,0 +94 @@ def main() -> int:
++    verify_certificate(KEYSTORE, store_type, alias, store_pass)
+diff --git a/.github/workflows/upload-cert-sha256.txt b/.github/workflows/upload-cert-sha256.txt
+new file mode 100644
+index 0000000..249222b
+--- /dev/null
++++ b/.github/workflows/upload-cert-sha256.txt
+@@ -0,0 +1 @@
++9ca8679b07fda48a25eb1b0b2dacf8ca17c8b7f0a58b89643fbc454a6a38bd7c
+diff --git a/PATCH_NOTES.md b/PATCH_NOTES.md
+index 0b50b7e..617098b 100644
+--- a/PATCH_NOTES.md
++++ b/PATCH_NOTES.md
+@@ -14,0 +15,7 @@ the upload keystore, and the run fails rather than hand over an unsigned bundle.
++## 1.2.3 — November 5, 2026
++
++**The other apps are on the Settings tab, and the build proves which key signed it**
++
++- Settings ends with **More apps**: UJournal, FamTM, My Hub and SideCut, each with what it does and a **Get** button that opens its Play listing.
++- The Android build now checks the release APK's certificate against MeasureT's upload certificate and **fails** when they differ, instead of printing it and passing.
++
+diff --git a/app.js b/app.js
+index 4e65aa7..3f93a05 100644
+--- a/app.js
++++ b/app.js
+@@ -9 +9 @@
+-var APP_VERSION = '1.2.2';
++var APP_VERSION = '1.2.3';
+@@ -11,0 +12,5 @@ var CHANGELOG = [
++  { version: '1.2.3', date: 'November 5, 2026', title: 'The other apps are on the Settings tab, and the build proves which key signed it', items: [
++    'Settings now ends with <b>More apps</b>: <b>UJournal</b>, <b>FamTM</b>, <b>My Hub</b> and <b>SideCut</b>, each with what it does and a <b>Get</b> button that opens its Play listing. MeasureT is the fourth app in the other apps&rsquo; own lists, and it was still being called Compass EDC there.',
++    'The <b>Android build</b> now checks the certificate on the release APK against MeasureT&rsquo;s upload certificate and <b>fails</b> if they differ. Before this it printed the certificate and passed whatever it found, so a keystore that Play would reject still produced files that looked ready to upload.',
++    'Nothing else changed &mdash; elevation, location, the level, the converter, currency, GPS measuring, the AR range finder, permissions and updates are exactly as they were.'
++  ]},
+diff --git a/index.html b/index.html
+index 63854b6..e590c9e 100644
+--- a/index.html
++++ b/index.html
+@@ -684 +684,12 @@ nav .navlabel{
+-    <div class="about-line">MeasureT <span id="app-version-line">v1.1.0</span> &middot; sensors: orientation, GPS, motion</div>
++    <!-- The other apps, in the same shape as the journal's and My Hub's lists: a name, what it
++         does, and a tap that opens its Play listing. The addresses are the packages each app is
++         published under, so a listing that is not live yet answers with Play's own page. -->
++    <div class="set-group glass" id="other-apps">
++      <div class="set-group-title">More apps</div>
++      <div class="set-row"><div><div class="label">UJournal</div><div class="sub">A journal with a calendar, plans and birthdays</div></div><a class="unitbtn" style="text-decoration:none" href="https://play.google.com/store/apps/details?id=app.ujournal" target="_blank" rel="noopener noreferrer">Get</a></div>
++      <div class="set-row"><div><div class="label">FamTM</div><div class="sub">The family tree in your pocket</div></div><a class="unitbtn" style="text-decoration:none" href="https://play.google.com/store/apps/details?id=com.FamTM.app" target="_blank" rel="noopener noreferrer">Get</a></div>
++      <div class="set-row"><div><div class="label">My Hub</div><div class="sub">One screen for the apps you use most</div></div><a class="unitbtn" style="text-decoration:none" href="https://play.google.com/store/apps/details?id=com.myhub.app" target="_blank" rel="noopener noreferrer">Get</a></div>
++      <div class="set-row"><div><div class="label">SideCut</div><div class="sub">A music player with its own equaliser</div></div><a class="unitbtn" style="text-decoration:none" href="https://play.google.com/store/apps/details?id=com.SideCut.myapp" target="_blank" rel="noopener noreferrer">Get</a></div>
++    </div>
++
++    <div class="about-line">MeasureT <span id="app-version-line">v1.2.3</span> &middot; sensors: orientation, GPS, motion</div>
+diff --git a/package.json b/package.json
+index e9d2639..8735a0b 100644
+--- a/package.json
++++ b/package.json
+@@ -3 +3 @@
+-  "version": "1.2.2",
++  "version": "1.2.3",
+diff --git a/sw.js b/sw.js
+index c230a38..0ea561b 100644
+--- a/sw.js
++++ b/sw.js
+@@ -3 +3 @@
+-var CACHE = 'measuret-v1.2.2';
++var CACHE = 'measuret-v1.2.3';
+diff --git a/updates.json b/updates.json
+index b7760c9..8e5618a 100644
+--- a/updates.json
++++ b/updates.json
+@@ -1 +1 @@
+-{"version":"1.2.2","url":"index.html","notes":["The <b>Compass</b> tab has been <b>removed</b>. It was the most complicated thing in the app, and the heading dial, its calibration banner, the marked bearing and the true-north switch went with it. MeasureT now has <b>six tabs</b> and opens on <b>Convert</b>.","The <b>currency answer</b> could be cut off at the bottom of its card on a phone with larger text, which is why the number was hard to see. The card now grows to fit what is in it instead of being squeezed, the answer is <b>larger and darker</b>, and the labels above it are legible.","Nothing else changed &mdash; elevation, location, the level, the converter, GPS measuring, the AR range finder, permissions and updates are exactly as they were."],"date":"November 5, 2026"}
+\ No newline at end of file
++{"version":"1.2.3","url":"index.html","notes":["Settings now ends with <b>More apps</b>: <b>UJournal</b>, <b>FamTM</b>, <b>My Hub</b> and <b>SideCut</b>, each with what it does and a <b>Get</b> button that opens its Play listing. MeasureT is the fourth app in the other apps&rsquo; own lists, and it was still being called Compass EDC there.","The <b>Android build</b> now checks the certificate on the release APK against MeasureT&rsquo;s upload certificate and <b>fails</b> if they differ. Before this it printed the certificate and passed whatever it found, so a keystore that Play would reject still produced files that looked ready to upload.","Nothing else changed &mdash; elevation, location, the level, the converter, currency, GPS measuring, the AR range finder, permissions and updates are exactly as they were."],"date":"November 5, 2026"}
+\ No newline at end of file
