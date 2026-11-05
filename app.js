@@ -6,9 +6,16 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.2.0';
+var APP_VERSION = '1.2.1';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.2.1', date: 'November 5, 2026', title: 'Type the currency, and a Currency tab that is a pleasure to look at', items: [
+    'The two currency buttons now open a <b>searchable list</b>: type <b>eur</b>, <b>euro</b> or <b>rupee</b> and it narrows to that currency, with the ones people reach for most at the top and a tick on the pair in use. Before this, picking from more than fifty currencies was a long scroll in a native dropdown.',
+    'The amount is an obvious field now: <b>tap the big number and type</b>, or tap <b>10</b>, <b>50</b>, <b>100</b> or <b>500</b>, and the answer follows as you type, with the currency you are typing in shown right beside it.',
+    'The tab looks and moves like one instrument: a single glowing card, the answer in a blue-to-green gradient, a spinning &#8645; on swap and a soft pulse each time the number changes. Anyone whose phone asks for less motion gets none of that motion.',
+    'Fixed: the update button stayed on <b>Updating&hellip;</b> forever after the automatic check on opening the tab. It now returns to its own label, or offers <b>Try again</b>.',
+    'The seven tab labels no longer run into each other on a narrow phone. Nothing else changed &mdash; the converter, GPS measuring, the AR range finder, the compass, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.2.0', date: 'November 4, 2026', title: 'A Currency tab, with the day&rsquo;s exchange rate', items: [
     'A <b>Currency</b> tab now sits between Convert and Settings. Type an amount, pick the two currencies, and it converts at the day&rsquo;s rate; the reverse rate is printed underneath, and the &#8645; button swaps the pair.',
     'The rates come from a public feed that needs no sign-in, and every answer is saved on the phone &mdash; so the tab keeps converting on a plane or with no signal, and says which day&rsquo;s rates you are looking at.',
@@ -1029,6 +1036,14 @@ function curMoney(n){
   if (a !== 0 && a < 0.01) return n.toFixed(4);
   return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
+// The amount as it was typed, without the trailing zeros a money format adds: "250", not
+// "250.00", because it is there to confirm what you entered.
+function curPlain(n){
+  if (!isFinite(n)) return '--';
+  var p = String(Math.round(n * 100) / 100).split('.');
+  p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return p.join('.');
+}
 function curRateFmt(n){
   if (!isFinite(n) || n <= 0) return '--';
   if (n >= 1000) return n.toFixed(0);
@@ -1036,7 +1051,30 @@ function curRateFmt(n){
   if (n >= 0.001) return n.toFixed(6).replace(/\.?0+$/, '');
   return n.toPrecision(3);
 }
-function curLabel(c){ return CUR_NAMES[c] ? c + ' \u2014 ' + CUR_NAMES[c] : c; }
+// The country behind each code, so the flag is drawn from the letters instead of being a
+// separate image: a regional-indicator pair is just the country code shifted into that block.
+var CUR_CONT = {
+  USD:'US', EUR:'EU', GBP:'GB', JPY:'JP', CNY:'CN', INR:'IN', PKR:'PK', BDT:'BD', LKR:'LK',
+  NPR:'NP', AED:'AE', SAR:'SA', QAR:'QA', KWD:'KW', BHD:'BH', OMR:'OM', JOD:'JO', ILS:'IL',
+  TRY:'TR', RUB:'RU', UAH:'UA', PLN:'PL', CZK:'CZ', HUF:'HU', RON:'RO', BGN:'BG', SEK:'SE',
+  NOK:'NO', DKK:'DK', CHF:'CH', ISK:'IS', CAD:'CA', AUD:'AU', NZD:'NZ', MXN:'MX', BRL:'BR',
+  ARS:'AR', CLP:'CL', COP:'CO', PEN:'PE', ZAR:'ZA', NGN:'NG', KES:'KE', GHS:'GH', EGP:'EG',
+  MAD:'MA', TND:'TN', HKD:'HK', SGD:'SG', MYR:'MY', IDR:'ID', THB:'TH', PHP:'PH', VND:'VN',
+  KRW:'KR', TWD:'TW'
+};
+// The pair list opens on these, in this order, before everything else alphabetically.
+var CUR_PINNED = ['USD','EUR','GBP','JPY','INR','AED','CAD','AUD','CNY','PKR'];
+var curFrom = 'USD', curTo = 'EUR', curPopTimer = null;
+
+function curName(c){ return CUR_NAMES[c] || c; }
+function curFlag(c){
+  var cc = CUR_CONT[c];
+  if (cc && String.fromCodePoint) {
+    try { return String.fromCodePoint(cc.charCodeAt(0) + 127397, cc.charCodeAt(1) + 127397); }
+    catch (e) {}
+  }
+  return '\uD83C\uDF10';
+}
 function curCodes(){
   var seen = {}, out = [];
   function add(c){ if (c && !seen[c]) { seen[c] = 1; out.push(c); } }
@@ -1047,47 +1085,68 @@ function curCodes(){
   out.sort();
   return out;
 }
-function curFillSelects(){
-  var fromSel = $('cur-from'), toSel = $('cur-to');
-  if (!fromSel || !toSel) return;
-  var keptFrom = fromSel.value, keptTo = toSel.value;
-  var codes = curCodes();
-  [fromSel, toSel].forEach(function(sel){
-    sel.innerHTML = '';
-    codes.forEach(function(c){
-      var o = document.createElement('option');
-      o.value = c; o.textContent = curLabel(c);
-      sel.appendChild(o);
-    });
-  });
-  var wantFrom = keptFrom || storeGet('cedc_cur_from') || 'USD';
-  var wantTo = keptTo || storeGet('cedc_cur_to') || 'EUR';
-  if (codes.indexOf(wantFrom) < 0) wantFrom = codes.indexOf('USD') >= 0 ? 'USD' : codes[0];
-  if (codes.indexOf(wantTo) < 0 || wantTo === wantFrom) {
-    var alt = codes.filter(function(c){ return c !== wantFrom; });
-    wantTo = alt.indexOf('EUR') >= 0 ? 'EUR' : (alt[0] || wantFrom);
-  }
-  fromSel.value = wantFrom;
-  toSel.value = wantTo;
+// The amount is typed, so it arrives as free text: keep the digits and a single decimal point.
+function curCleanAmount(s){
+  s = String(s == null ? '' : s).replace(/,/g, '').replace(/[^\d.]/g, '');
+  var i = s.indexOf('.');
+  if (i >= 0) s = s.slice(0, i + 1) + s.slice(i + 1).replace(/\./g, '');
+  return s.slice(0, 15);
+}
+function curAmount(){
+  var el = $('cur-value');
+  if (!el) return NaN;
+  var n = parseFloat(curCleanAmount(el.value));
+  return isFinite(n) ? n : NaN;
 }
 function curRate(){
-  var f = $('cur-from').value, t = $('cur-to').value;
   if (!curRates || !curRates.rates) return null;
-  var rf = curRates.rates[f], rt = curRates.rates[t];
+  var rf = curRates.rates[curFrom], rt = curRates.rates[curTo];
   if (!rf || !rt) return null;
-  return { from: f, to: t, rate: rt / rf };
+  return { from: curFrom, to: curTo, rate: rt / rf };
+}
+// The two buttons, the code beside the amount and the flag all follow the pair.
+function curPaint(){
+  function put(id, txt){ var el = $(id); if (el) el.textContent = txt; }
+  put('cur-from-flag', curFlag(curFrom)); put('cur-from-code', curFrom); put('cur-from-name', curName(curFrom));
+  put('cur-to-flag', curFlag(curTo)); put('cur-to-code', curTo); put('cur-to-name', curName(curTo));
+  put('cur-amount-code', curFrom);
 }
 function curSetSource(txt){ var el = $('cur-source'); if (el) el.textContent = txt; }
+// A soft pulse on the answer, so typing and swapping feel like a real instrument rather than
+// a form. It is decoration: the class does nothing for a phone that asks for less motion.
+function curPop(){
+  var el = $('cur-result');
+  if (!el || !el.classList) return;
+  el.classList.remove('pop');
+  void el.offsetWidth;   // restart the animation on the next frame
+  el.classList.add('pop');
+  clearTimeout(curPopTimer);
+  curPopTimer = setTimeout(function(){ el.classList.remove('pop'); }, 190);
+}
+// The quick-amount chips light up when the amount on screen is theirs.
+function curChips(){
+  var n = curAmount();
+  var chips = document.querySelectorAll('#cur-chips .cur-chip');
+  for (var i = 0; i < chips.length; i++) {
+    var v = parseFloat(chips[i].getAttribute('data-amount'));
+    chips[i].className = 'cur-chip' + (isFinite(n) && v === n ? ' on' : '');
+  }
+}
 function curUpdate(){
   if (!$('cur-result')) return;
-  var r = curRate();
-  var amount = parseFloat($('cur-value').value);
+  curPaint();
+  var r = curRate(), amount = curAmount();
+  var sub = $('cur-result-sub');
   if (!r) {
     $('cur-result').textContent = '--';
+    if (sub) sub.textContent = '';
     $('cur-rate-line').textContent = '--';
     $('cur-rate-inverse').textContent = '';
   } else {
     $('cur-result').textContent = isNaN(amount) ? '--' : curMoney(amount * r.rate) + ' ' + r.to;
+    if (sub) sub.textContent = isNaN(amount)
+      ? 'Type an amount'
+      : curPlain(amount) + ' ' + r.from + (curFresh() ? ' at today\u2019s rate' : ' at the saved rate');
     $('cur-rate-line').textContent = '1 ' + r.from + ' = ' + curRateFmt(r.rate) + ' ' + r.to;
     $('cur-rate-inverse').textContent = '1 ' + r.to + ' = ' + curRateFmt(1 / r.rate) + ' ' + r.from;
   }
@@ -1099,6 +1158,8 @@ function curUpdate(){
   curSetSource(curRates
     ? 'Rates from ' + (curRates.source || 'a public feed') + ', ' + curDate(curRates.date) + '. Daily reference rates, not what a bank charges.'
     : 'No rates saved on this phone yet \u2014 this tab needs one connection to fill in.');
+  curChips();
+  curPop();
 }
 function curFetch(i){
   if (i >= CUR_FEEDS.length) return Promise.reject(new Error('no feed answered'));
@@ -1121,14 +1182,18 @@ function curRefresh(manual){
     return;
   }
   curBusy = true;
+  // The label is put back on BOTH paths. The automatic check on opening the tab used to
+  // leave the button reading "Updating..." for the rest of the session.
   if (btn) btn.textContent = 'Updating\u2026';
   curSetSource('Updating rates\u2026');
   curFetch(0).then(function(got){
     curRates = got;
     storeSet(CUR_KEY, JSON.stringify(got));
-    curFillSelects();
     curUpdate();
-    if (manual && btn) { btn.textContent = 'Updated'; setTimeout(function(){ btn.textContent = 'Update rates'; }, 1500); }
+    if (btn) {
+      btn.textContent = 'Updated \u2713';
+      setTimeout(function(){ if (btn.textContent === 'Updated \u2713') btn.textContent = 'Update rates'; }, 1500);
+    }
   }).catch(function(){
     curUpdate();
     curSetSource(curRates
@@ -1141,29 +1206,156 @@ function curOnOpen(){
   if (!$('cur-result')) return;
   if (!curRates || !curFresh()) curRefresh(false);
 }
+// ---- the picker sheet: a currency list you can type into ----
+var curSide = 'from';
+function curMatches(q){
+  q = String(q == null ? '' : q).trim().toLowerCase();
+  var codes = curCodes();
+  if (!q) {
+    var head = CUR_PINNED.filter(function(c){ return codes.indexOf(c) >= 0; });
+    var rest = codes.filter(function(c){ return head.indexOf(c) < 0; });
+    return head.concat(rest);
+  }
+  // An exact code first, then codes that begin with what was typed, then names that
+  // contain it - so "eu" offers EUR at the top, not halfway down a list.
+  var exact = [], starts = [], contains = [];
+  codes.forEach(function(c){
+    var name = curName(c).toLowerCase(), cc = c.toLowerCase();
+    if (cc === q) exact.push(c);
+    else if (cc.indexOf(q) === 0) starts.push(c);
+    else if (name.indexOf(q) >= 0) contains.push(c);
+  });
+  return exact.concat(starts, contains);
+}
+function curPaintList(q){
+  var list = $('cur-list');
+  if (!list) return;
+  var codes = curMatches(q), current = curSide === 'from' ? curFrom : curTo;
+  list.innerHTML = '';
+  if (!codes.length) {
+    var box = document.createElement('div');
+    box.className = 'cur-empty';
+    box.textContent = 'Nothing matches \u201c' + String(q) + '\u201d. Try a three-letter code, or a name like euro or rupee.';
+    list.appendChild(box);
+    return;
+  }
+  codes.forEach(function(c){
+    var row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'cur-row';
+    row.setAttribute('data-code', c);
+    row.innerHTML =
+      '<span class="flag">' + curFlag(c) + '</span>' +
+      '<span class="code">' + c + '</span>' +
+      '<span class="cname">' + curName(c) + '</span>' +
+      (c === current ? '<span class="tick">&#10003;</span>' : '');
+    row.addEventListener('click', function(){ curChoose(c); });
+    list.appendChild(row);
+  });
+}
+function curOpenSheet(side){
+  var sheet = $('cur-sheet');
+  if (!sheet) return;
+  curSide = side === 'to' ? 'to' : 'from';
+  var title = $('cur-sheet-title');
+  if (title) title.textContent = curSide === 'from' ? 'Convert from' : 'Convert to';
+  var search = $('cur-search');
+  if (search) search.value = '';
+  curPaintList('');
+  sheet.hidden = false;
+  if (search) { try { search.focus(); } catch (e) {} }
+  var raf = window.requestAnimationFrame || function(fn){ return setTimeout(fn, 0); };
+  raf(function(){ sheet.classList.add('in'); });
+}
+function curCloseSheet(){
+  var sheet = $('cur-sheet');
+  if (!sheet || sheet.hidden) return;
+  sheet.classList.remove('in');
+  setTimeout(function(){ sheet.hidden = true; }, 200);
+}
+// Choosing the currency that is already on the other side swaps the pair instead of leaving
+// both sides the same, which would only ever read 1 unit to 1 unit.
+function curChoose(code){
+  if (curCodes().indexOf(code) < 0) return;
+  if (curSide === 'from') {
+    if (code === curTo) curTo = curFrom;
+    curFrom = code;
+  } else {
+    if (code === curFrom) curFrom = curTo;
+    curTo = code;
+  }
+  storeSet('cedc_cur_from', curFrom);
+  storeSet('cedc_cur_to', curTo);
+  curCloseSheet();
+  curUpdate();
+}
+
 (function initCurrency(){
-  var fromSel = $('cur-from'), toSel = $('cur-to');
-  if (!fromSel || !toSel) return;
+  if (!$('cur-result')) return;
   curRates = curLoadCache();
-  if ($('cur-value')) {
+
+  var input = $('cur-value');
+  if (input) {
     var saved = storeGet('cedc_cur_amount');
-    if (saved) $('cur-value').value = saved;
-    $('cur-value').addEventListener('input', function(){
+    if (saved) input.value = curCleanAmount(saved);
+    input.addEventListener('input', function(){
+      var clean = curCleanAmount(this.value);
+      if (clean !== this.value) this.value = clean;
       storeSet('cedc_cur_amount', this.value);
       curUpdate();
     });
+    input.addEventListener('focus', function(){ try { this.select(); } catch (e) {} });
   }
-  curFillSelects();
-  curUpdate();
-  fromSel.addEventListener('change', curUpdate);
-  toSel.addEventListener('change', curUpdate);
-  $('cur-swap').addEventListener('click', function(){
-    var f = fromSel.value;
-    fromSel.value = toSel.value;
-    toSel.value = f;
+
+  var codes = curCodes();
+  var sFrom = storeGet('cedc_cur_from'), sTo = storeGet('cedc_cur_to');
+  if (sFrom && codes.indexOf(sFrom) >= 0) curFrom = sFrom;
+  if (sTo && codes.indexOf(sTo) >= 0) curTo = sTo;
+  if (codes.indexOf(curFrom) < 0) curFrom = codes.indexOf('USD') >= 0 ? 'USD' : codes[0];
+  if (codes.indexOf(curTo) < 0) curTo = codes.indexOf('EUR') >= 0 ? 'EUR' : (codes[1] || codes[0]);
+  if (curTo === curFrom) curTo = codes.filter(function(c){ return c !== curFrom; })[0] || curFrom;
+
+  var fromBtn = $('cur-from-btn'), toBtn = $('cur-to-btn');
+  if (fromBtn) fromBtn.addEventListener('click', function(){ curOpenSheet('from'); });
+  if (toBtn) toBtn.addEventListener('click', function(){ curOpenSheet('to'); });
+
+  var swap = $('cur-swap');
+  if (swap) swap.addEventListener('click', function(){
+    var f = curFrom; curFrom = curTo; curTo = f;
+    swap.classList.toggle('spin');
     curUpdate();
   });
-  $('cur-update').addEventListener('click', function(){ curRefresh(true); });
+
+  var chips = document.querySelectorAll('#cur-chips .cur-chip');
+  for (var i = 0; i < chips.length; i++) {
+    chips[i].addEventListener('click', function(){
+      var v = this.getAttribute('data-amount');
+      if (input) input.value = v;
+      storeSet('cedc_cur_amount', v);
+      curUpdate();
+    });
+  }
+
+  var search = $('cur-search');
+  if (search) {
+    search.addEventListener('input', function(){ curPaintList(this.value); });
+    search.addEventListener('keydown', function(e){
+      if (e.key === 'Enter' || e.keyCode === 13) {
+        var first = curMatches(this.value)[0];
+        if (first) curChoose(first);
+      }
+    });
+  }
+  var sheet = $('cur-sheet');
+  if (sheet) sheet.addEventListener('click', function(e){ if (e.target === sheet) curCloseSheet(); });
+  document.addEventListener('keydown', function(e){
+    if ((e.key === 'Escape' || e.keyCode === 27) && sheet && !sheet.hidden) curCloseSheet();
+  });
+
+  var update = $('cur-update');
+  if (update) update.addEventListener('click', function(){ curRefresh(true); });
+
+  curUpdate();
 })();
 
 // ---------- RELEASES / OTA ----------
