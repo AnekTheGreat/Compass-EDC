@@ -231,12 +231,145 @@ body::before{
 .hh-quick .hh-sub{font-size:11px;opacity:0.9;margin-top:2px;}
 
 /* ---------- CURRENCY ---------- */
-#cur-value{flex:1;min-width:0;font-size:30px;font-weight:200;color:var(--text);background:none;border:none;outline:none;border-bottom:1px solid var(--glass-line);padding:6px 2px;font-variant-numeric:tabular-nums;user-select:text;-webkit-user-select:text;}
+/* One glowing card holds the amount, the pair and the answer, so the tab reads as a single
+   instrument instead of four stacked boxes. Two slow colour washes drift behind the glass;
+   they are decoration only and stop for anyone who asks the phone for less motion. */
 .cur-stamp{font-size:11px;color:var(--dim);letter-spacing:0.5px;}
+.cur-hero{
+  position:relative;overflow:hidden;border-radius:26px;padding:16px 16px 18px;
+  background:linear-gradient(160deg, rgba(255,255,255,0.66), rgba(255,255,255,0.3));
+  border:1px solid rgba(255,255,255,0.72);
+  backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.9), 0 10px 28px rgba(60,120,160,0.18);
+}
+.cur-hero::before,.cur-hero::after{content:'';position:absolute;border-radius:50%;pointer-events:none;}
+.cur-hero::before{
+  width:250px;height:250px;left:-90px;top:-150px;
+  background:radial-gradient(circle, rgba(91,184,242,0.5), rgba(91,184,242,0) 70%);
+  animation:curDrift 13s ease-in-out infinite alternate;
+}
+.cur-hero::after{
+  width:220px;height:220px;right:-80px;bottom:-150px;
+  background:radial-gradient(circle, rgba(47,166,107,0.38), rgba(47,166,107,0) 70%);
+  animation:curDrift 17s ease-in-out infinite alternate-reverse;
+}
+@keyframes curDrift{
+  from{transform:translate3d(0,0,0) scale(1);}
+  to{transform:translate3d(20px,14px,0) scale(1.14);}
+}
+.cur-hero > *{position:relative;}
+.cur-amount-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dimmer);}
+.cur-amount-row{
+  display:flex;align-items:center;gap:10px;margin-top:2px;
+  border-bottom:1.5px solid rgba(14,51,80,0.12);transition:border-color .2s ease;
+}
+.cur-amount-row:focus-within{border-bottom-color:#2f8fd6;}
+#cur-value{
+  flex:1;min-width:0;font:inherit;font-size:42px;font-weight:200;line-height:1.15;letter-spacing:-1px;
+  color:var(--text);background:none;border:none;outline:none;padding:2px 0;
+  font-variant-numeric:tabular-nums;user-select:text;-webkit-user-select:text;caret-color:#2f8fd6;
+}
+#cur-value::placeholder{color:rgba(14,51,80,0.22);}
+.cur-amount-code{
+  flex-shrink:0;font-size:13px;font-weight:600;letter-spacing:1px;color:#2f8fd6;
+  background:rgba(255,255,255,0.7);border-radius:10px;padding:5px 9px;
+}
+.cur-chips{display:flex;gap:7px;margin-top:12px;}
+.cur-chip{
+  flex:1;min-width:0;padding:9px 0;border-radius:14px;font:inherit;font-size:13px;font-weight:600;
+  color:#2f8fd6;background:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.78);
+  transition:transform .12s ease, background .18s ease, color .18s ease;
+}
+.cur-chip:active{transform:scale(0.94);}
+.cur-chip.on{
+  color:#fff;background:linear-gradient(180deg,#5bb8f2,#2f8fd6);border-color:#2f8fd6;
+  box-shadow:0 4px 12px rgba(47,143,214,0.3);
+}
+.cur-pickers{display:grid;grid-template-columns:1fr 44px 1fr;align-items:center;gap:8px;margin-top:14px;}
+.cur-pick{
+  display:flex;flex-direction:column;align-items:flex-start;gap:0;min-width:0;
+  padding:9px 11px;border-radius:16px;font:inherit;text-align:left;
+  background:rgba(255,255,255,0.62);border:1px solid rgba(255,255,255,0.85);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.9);transition:transform .12s ease;
+}
+.cur-pick:active{transform:scale(0.97);}
+.cur-pick .flag{font-size:17px;line-height:1.25;}
+.cur-pick .code{font-size:16px;font-weight:600;letter-spacing:0.5px;color:var(--text);line-height:1.2;}
+.cur-pick .cname{font-size:10px;color:var(--dim);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cur-pick .hint{font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dimmer);margin-top:2px;}
+.cur-swap{
+  width:44px;height:44px;border-radius:50%;font:inherit;font-size:17px;color:#fff;
+  background:linear-gradient(180deg,#5bb8f2,#2f8fd6);border:1px solid #2f8fd6;
+  box-shadow:0 5px 14px rgba(47,143,214,0.35);
+  transition:transform .35s cubic-bezier(.34,1.56,.64,1);
+}
+.cur-swap.spin{transform:rotate(180deg);}
+.cur-result-wrap{margin-top:16px;text-align:center;}
+.cur-result{
+  font-size:40px;font-weight:300;line-height:1.15;letter-spacing:-1px;color:var(--text);
+  font-variant-numeric:tabular-nums;transition:transform .16s ease;
+}
+.cur-result.pop{transform:scale(1.05);}
+@supports ((-webkit-background-clip:text) or (background-clip:text)){
+  .cur-result{
+    background:linear-gradient(90deg,#1a6da9,#12805a);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+}
+.cur-result-sub{font-size:11px;color:var(--dim);margin-top:4px;letter-spacing:0.3px;min-height:14px;}
 .cur-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}
 .cur-badge{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--accent2);}
 .cur-badge.stale{color:var(--amber);}
+.cur-rate-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:8px 0;}
+.cur-rate-row + .cur-rate-row{border-top:1px solid rgba(255,255,255,0.6);}
+.cur-rate-row .k{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dimmer);}
+.cur-rate-row .v{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;text-align:right;}
 .cur-note{font-size:12px;line-height:1.6;color:var(--dim);margin-top:10px;}
+
+/* The picker sheet: a currency list you can type into. */
+.cur-sheet{
+  position:fixed;inset:0;z-index:950;display:flex;flex-direction:column;justify-content:flex-end;
+  background:rgba(14,51,80,0.34);opacity:0;transition:opacity .2s ease;
+}
+.cur-sheet[hidden]{display:none;}
+.cur-sheet.in{opacity:1;}
+.cur-sheet-panel{
+  width:100%;max-width:470px;margin:0 auto;max-height:82vh;display:flex;flex-direction:column;
+  border-radius:26px 26px 0 0;padding:12px 16px calc(14px + env(safe-area-inset-bottom));
+  background:rgba(244,250,254,0.985);border:1px solid rgba(255,255,255,0.9);
+  box-shadow:0 -12px 40px rgba(60,120,160,0.32);
+  transform:translateY(16px);transition:transform .24s cubic-bezier(.2,.9,.3,1);
+}
+.cur-sheet.in .cur-sheet-panel{transform:translateY(0);}
+.cur-sheet-grip{width:44px;height:5px;border-radius:3px;background:rgba(14,51,80,0.16);margin:0 auto 10px;}
+.cur-sheet-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);font-weight:600;}
+.cur-search{
+  display:flex;align-items:center;gap:9px;margin-top:10px;padding:11px 13px;border-radius:15px;
+  background:rgba(255,255,255,0.92);border:1px solid rgba(14,51,80,0.1);
+}
+.cur-search span{font-size:14px;color:var(--dimmer);}
+.cur-search input{
+  flex:1;min-width:0;border:none;outline:none;background:none;font:inherit;font-size:16px;
+  color:var(--text);user-select:text;-webkit-user-select:text;
+}
+.cur-search input::placeholder{color:var(--dimmer);}
+.cur-list{overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:8px;flex:1;}
+.cur-row{
+  display:flex;align-items:center;gap:11px;width:100%;padding:11px 8px;font:inherit;
+  background:none;border:none;border-bottom:1px solid rgba(14,51,80,0.07);
+  text-align:left;border-radius:13px;
+}
+.cur-row:active{background:rgba(91,184,242,0.18);}
+.cur-row .flag{font-size:20px;line-height:1;width:26px;text-align:center;flex-shrink:0;}
+.cur-row .code{font-size:14px;font-weight:600;color:var(--text);width:50px;flex-shrink:0;}
+.cur-row .cname{font-size:12px;color:var(--dim);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cur-row .tick{color:#2f8fd6;font-size:15px;flex-shrink:0;}
+.cur-empty{font-size:12px;color:var(--dim);padding:20px 10px;text-align:center;line-height:1.6;}
+@media (prefers-reduced-motion: reduce){
+  .cur-hero::before,.cur-hero::after{animation:none;}
+  .cur-swap,.cur-result,.cur-chip,.cur-pick,.cur-sheet,.cur-sheet-panel{transition:none;}
+  .cur-result.pop{transform:none;}
+}
 
 /* ---------- NAV ---------- */
 nav{
@@ -251,13 +384,19 @@ nav{
     0 10px 30px rgba(60,120,160,0.22);
   position:relative;z-index:1;
 }
+/* Seven labels in the width five used to have: at 10px with letter-spacing, "Compass" and
+   "Elevation" ran into each other. The label now scales with the screen and refuses to
+   spill out of its button. */
 nav button{
-  flex:1;background:none;border:none;padding:12px 0 8px;color:var(--dimmer);
+  flex:1;min-width:0;background:none;border:none;padding:11px 2px 8px;color:var(--dimmer);
   display:flex;flex-direction:column;align-items:center;gap:4px;
 }
 nav button.active{color:#2f8fd6;}
-nav svg{width:22px;height:22px;}
-nav .navlabel{font-size:10px;letter-spacing:0.5px;}
+nav svg{width:21px;height:21px;flex-shrink:0;}
+nav .navlabel{
+  font-size:clamp(7.5px,2.2vw,10px);letter-spacing:0;max-width:100%;
+  white-space:nowrap;overflow:hidden;
+}
 </style>
 </head>
 <body>
@@ -464,7 +603,7 @@ nav .navlabel{font-size:10px;letter-spacing:0.5px;}
           <div class="l" style="margin-top:12px;">Distance to target</div>
           <div class="cov-result" style="font-size:28px;margin-top:4px;" id="ar-dist">--</div>
           <div class="cov-inputrow" style="margin-top:12px;">
-            <span style="font-size:12px;color:var(--dim);white-space:nowrap;">Eve / phone height (m)</span>
+            <span style="font-size:12px;color:var(--dim);white-space:nowrap;">Eye / phone height (m)</span>
             <input id="ar-height" type="number" step="0.05" min="0.5" max="3" value="1.6">
           </div>
           <div style="font-size:11px;color:var(--dimmer);margin-top:8px;line-height:1.5;">Line the crosshair up with the base of the object where it meets the ground, keep your phone tilted down, and hold steady. Distance is estimated as height &divide; tan(aim angle) — approximate, works best outdoors with GPS accuracy reachable.
@@ -512,25 +651,46 @@ nav .navlabel{font-size:10px;letter-spacing:0.5px;}
       <span class="cur-stamp" id="cur-stamp">&nbsp;</span>
     </div>
 
-    <div class="card glass">
-      <div class="cov-inputrow">
-        <input id="cur-value" type="number" inputmode="decimal" min="0" placeholder="Amount" value="100">
-        <button class="cov-swap" id="cur-swap" title="Swap currencies">&#8645;</button>
+    <div class="cur-hero">
+      <div class="cur-amount-label">Amount</div>
+      <div class="cur-amount-row">
+        <input id="cur-value" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"
+               placeholder="0" value="100" aria-label="Amount to convert">
+        <span class="cur-amount-code" id="cur-amount-code">USD</span>
       </div>
-      <div class="cov-unitsrow">
-        <select id="cur-from"></select>
-        <span class="cov-arrow">&#8594;</span>
-        <select id="cur-to"></select>
+      <div class="cur-chips" id="cur-chips">
+        <button class="cur-chip" data-amount="10">10</button>
+        <button class="cur-chip" data-amount="50">50</button>
+        <button class="cur-chip on" data-amount="100">100</button>
+        <button class="cur-chip" data-amount="500">500</button>
       </div>
-      <div class="cov-resultrow">
-        <div class="cov-result" id="cur-result">--</div>
+
+      <div class="cur-pickers">
+        <button class="cur-pick" id="cur-from-btn" aria-label="Change the currency you are converting from">
+          <span class="flag" id="cur-from-flag">&#127482;&#127480;</span>
+          <span class="code" id="cur-from-code">USD</span>
+          <span class="cname" id="cur-from-name">US Dollar</span>
+          <span class="hint">From</span>
+        </button>
+        <button class="cur-swap" id="cur-swap" title="Swap the two currencies" aria-label="Swap the two currencies">&#8645;</button>
+        <button class="cur-pick" id="cur-to-btn" aria-label="Change the currency you are converting to">
+          <span class="flag" id="cur-to-flag">&#127466;&#127482;</span>
+          <span class="code" id="cur-to-code">EUR</span>
+          <span class="cname" id="cur-to-name">Euro</span>
+          <span class="hint">To</span>
+        </button>
+      </div>
+
+      <div class="cur-result-wrap">
+        <div class="cur-result" id="cur-result">--</div>
+        <div class="cur-result-sub" id="cur-result-sub"></div>
       </div>
     </div>
 
     <div class="card glass" style="margin-top:12px;">
       <div class="cur-head"><div class="l">Rate</div><span class="cur-badge" id="cur-badge"></span></div>
-      <div class="cov-equation" id="cur-rate-line">--</div>
-      <div class="cov-equation" id="cur-rate-inverse"></div>
+      <div class="cur-rate-row"><span class="k">Unit</span><span class="v" id="cur-rate-line">--</span></div>
+      <div class="cur-rate-row"><span class="k">Reverse</span><span class="v" id="cur-rate-inverse"></span></div>
       <div class="cur-note" id="cur-source">Loading the day's rates&hellip;</div>
     </div>
 
@@ -540,6 +700,21 @@ nav .navlabel{font-size:10px;letter-spacing:0.5px;}
 
     <div class="card glass" style="margin-top:12px;">
       <div class="cur-note" style="margin-top:0;">These are daily reference rates, not the rate a bank, a card or a cash machine gives you. The last ones fetched stay on the phone, so this tab keeps converting with no connection.</div>
+    </div>
+
+    <!-- The picker. A native select cannot be searched, and the feed carries more than fifty
+         currencies, so choosing one was a scroll hunt: this sheet takes a typed code or name. -->
+    <div class="cur-sheet" id="cur-sheet" hidden>
+      <div class="cur-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="cur-sheet-title">
+        <div class="cur-sheet-grip"></div>
+        <div class="cur-sheet-title" id="cur-sheet-title">Pick a currency</div>
+        <div class="cur-search">
+          <span aria-hidden="true">&#128269;</span>
+          <input id="cur-search" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="Type USD, euro, rupee&hellip;" aria-label="Search currencies">
+        </div>
+        <div class="cur-list" id="cur-list"></div>
+      </div>
     </div>
   </section>
 

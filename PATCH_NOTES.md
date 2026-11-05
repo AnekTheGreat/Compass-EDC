@@ -7,9 +7,27 @@ installed copy shows in Settings → Updates, and `dev/ota.mjs --check` fails a 
 `APP_VERSION`, changelog head, `updates.json` and `package.json` disagree. This file mirrors those
 entries for anyone reading the repository.
 
-Every run of the Android workflow produces four files: `MeasureT-<version>-debug.apk`,
-`MeasureT-<version>-debug.aab`, `MeasureT-<version>.aab` (the Play upload) and — when the keystore
-secrets are set — `MeasureT-<version>.apk`.
+Every run of the Android workflow produces four files: `MeasureT-<version>-release.aab` (the Play
+upload), `MeasureT-<version>-release.apk` (the same build, installable), and the debug pair
+`MeasureT-<version>-debug.apk` / `MeasureT-<version>-debug.aab`. The release pair is signed with
+the upload keystore, and the run fails rather than hand over an unsigned bundle.
+
+## 1.2.1 — 2026-11-05 — type the currency
+
+### Changed
+- Both currency buttons open a **searchable list**: type a three-letter code (`eur`) or a name
+  (`euro`, `rupee`) and it narrows as you type; common currencies sit at the top and the pair in
+  use is ticked. Enter takes the first match; Escape or a tap outside closes it.
+- The amount is a real field — tap the big number and type, or use the 10 / 50 / 100 / 500 chips —
+  with the currency being typed in shown beside it, and the answer following as you type.
+- One glowing card holds the amount, the pair and the answer: the answer is set in a blue-to-green
+  gradient, ⇅ spins when the pair swaps, and the number pulses when it changes. All of that motion
+  is off under `prefers-reduced-motion`.
+- The seven tab labels scale with the screen width instead of running into each other.
+
+### Fixed
+- The update button could stay on **Updating…** after the automatic check on opening the tab. It
+  now goes back to *Update rates*, or offers *Try again* when the fetch failed.
 
 ## 1.2.0 — 2026-11-04 — a Currency tab
 
