@@ -710,6 +710,12 @@ nav .navlabel{
         <div><div class="label">Check for updates</div><div class="sub" id="ota-status">Checking&hellip;</div></div>
         <button class="unitbtn" id="btn-check-updates">Check</button>
       </div>
+      <!-- 1.3.1 - the way out of a stuck update: a fresh address cannot be answered by a
+           cached copy, so this loads the real page from the server. -->
+      <div class="set-row">
+        <div><div class="label">Reload this page</div><div class="sub">Use this if an update seems stuck</div></div>
+        <button class="unitbtn" id="btn-reload-page">Reload</button>
+      </div>
     </div>
 
     <!-- Support: the five Stripe Payment Links SideCut already opens - fixed amounts, a page
@@ -735,7 +741,7 @@ nav .navlabel{
       <div class="set-row"><div><div class="label">SideCut</div><div class="sub">A music player with its own equaliser</div></div><a class="unitbtn" style="text-decoration:none" href="https://play.google.com/store/apps/details?id=com.SideCut.myapp" target="_blank" rel="noopener noreferrer">Get</a></div>
     </div>
 
-    <div class="about-line">MeasureT <span id="app-version-line">v1.3.0</span> &middot; sensors: orientation, GPS, motion</div>
+    <div class="about-line">MeasureT <span id="app-version-line">v1.3.1</span> &middot; sensors: orientation, GPS, motion</div>
   </section>
 
   <nav>
@@ -766,6 +772,9 @@ nav .navlabel{
   </nav>
 </div>
 
-<script src="app.js"></script>
+<!-- 1.3.1 - THE SCRIPT IS ASKED FOR BY A VERSIONED ADDRESS. GitHub Pages sends
+     max-age=600 on every file, and a cache can only answer an address it has seen;
+     this one is new with every release, so a stale copy cannot be handed back. -->
+<script src="app.js?v=1.3.1"></script>
 </body>
 </html>

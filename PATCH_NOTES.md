@@ -12,6 +12,16 @@ upload), `MeasureT-<version>-release.apk` (the same build, installable), and the
 `MeasureT-<version>-debug.apk` / `MeasureT-<version>-debug.aab`. The release pair is signed with
 the upload keystore, and the run fails rather than hand over an unsigned bundle.
 
+## 1.3.1 — November 6, 2026
+
+**Updates that never took: the version loop is gone**
+
+- The app's page and its script are each cached for **ten minutes** by the host, and only the page was being fetched fresh. The app therefore reported the version from the **old script** while the release feed kept offering the new one: **Update now** landed back on the same version, every time.
+- The script is now requested by a **versioned address** (`app.js?v=1.3.1`), which no phone's cache has ever seen, and the service worker no longer trusts the browser cache for **any** of the app's files.
+- **Check for updates** can no longer sit on "Checking…" forever: ten seconds and it reports that there was no answer.
+- Settings → Updates ends with **Reload this page**, which loads the app from a fresh address — the way out if a cache ever disagrees with the server again.
+- Nothing else changed — the time-zone chip, elevation, location, the level, the converter, currency, GPS measuring, the AR range finder and permissions are as they were.
+
 ## 1.3.0 — November 6, 2026
 
 **A Time chip in Convert: what time it is anywhere, and how far that is from you**

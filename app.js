@@ -6,9 +6,16 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.3.0';
+var APP_VERSION = '1.3.1';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.3.1', date: 'November 6, 2026', title: 'Updates that never took: the version loop is gone', items: [
+    'Fixed the update that kept getting stuck: the page and its script are each cached for <b>ten minutes</b> by the site that hosts them, and while the page was being fetched fresh the script was not. The app therefore kept reporting the version from the <b>old script</b> while the release feed kept offering the new one &mdash; <b>Update now</b> landed back on the same version, every time.',
+    'The script now comes from a <b>versioned address</b>, so every release is a file the phone has never seen and cannot answer from its cache; the service worker also stopped trusting the browser cache for <b>all</b> of the app&rsquo;s files, not only the page.',
+    'The <b>Check for updates</b> row can no longer sit on &ldquo;Checking&hellip;&rdquo; forever: ten seconds and it reports that there was no answer.',
+    'Settings &rarr; Updates now ends with <b>Reload this page</b>, which loads the app from a fresh address &mdash; there if a phone&rsquo;s cache ever disagrees with the server again.',
+    'Nothing else changed &mdash; the time-zone chip, elevation, location, the level, the converter and its six categories, currency, GPS measuring, the AR range finder and permissions are exactly as they were.'
+  ]},
   { version: '1.3.0', date: 'November 6, 2026', title: 'A Time chip in Convert: what time it is anywhere, and how far that is from you', items: [
     'A <b>Time</b> chip now sits at the end of the Convert row. Pick a place from the searchable list &mdash; about fifty of them, from <b>London</b> and <b>Lagos</b> to <b>Tokyo</b> and <b>Auckland</b> &mdash; and the card shows the time there, the day there, and the gap from your own clock in words: <b>3 hours ahead of you</b>, <b>the same time as you</b>, <b>5 hours 45 minutes behind you</b>.',
     'Your own time sits under it, so both clocks are on one screen, and the place you last picked is remembered &mdash; reopening the chip shows the same clock instead of an empty card.',
@@ -1506,13 +1513,21 @@ function showUpdateDialog(m){
   d.querySelector('#ota-apply').addEventListener('click', function(){ applyUpdate(m); });
 }
 
+// 1.3.1 - A FRESH ADDRESS, NOT A RELOAD. A plain reload asks for the same URL again, and
+// the WebView is allowed to answer that from its cache: GitHub Pages sends max-age=600 on
+// every file, so a reload can land back on the very page that offered the update. A URL with
+// the version and a timestamp on it is one no cache has ever seen.
+function hardReload(version){
+  var url = 'index.html?v=' + encodeURIComponent(version || APP_VERSION) + '&t=' + Date.now();
+  if (location.replace) location.replace(url); else location.href = url;
+}
 function applyUpdate(m){
   if (m && m.version) storeSet('cedc_ota_seen_' + m.version, '1');
   var dlg = $('ota-dialog'); if (dlg) dlg.remove();
   if (setOtaStatus) setOtaStatus('Updating…');
-  if (!('serviceWorker' in navigator)) { location.reload(); return; }
+  if (!('serviceWorker' in navigator)) { hardReload(m && m.version); return; }
   var done = false;
-  function finish(){ if (done) return; done = true; location.reload(); }
+  function finish(){ if (done) return; done = true; hardReload(m && m.version); }
   // The new worker skipWaiting()s itself on install, so taking over raises controllerchange.
   navigator.serviceWorker.addEventListener('controllerchange', finish);
   (otaReg ? Promise.resolve(otaReg) : (navigator.serviceWorker.getRegistration() || Promise.reject()))
@@ -1528,7 +1543,23 @@ function applyUpdate(m){
 function checkForUpdates(interactive){
   if (typeof fetch !== 'function'){ if (interactive) setOtaStatus('v' + APP_VERSION + ' · check unavailable'); return Promise.resolve(null); }
   setOtaStatus('Checking…');
-  return fetch(OTA_ENDPOINT, { cache: 'no-store' })
+  // 1.3.1 - ten seconds and it is an answer, not a spinner. A fetch that never settles used
+  // to leave the Settings row on "Checking…" for the rest of the session, with nothing
+  // to tap. AbortController ends the request; the timer ends the wait.
+  function otaFetch(){
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var opts = { cache: 'no-store' };
+    if (ctrl) opts.signal = ctrl.signal;
+    return new Promise(function(resolve, reject){
+      var timer = setTimeout(function(){
+        if (ctrl) { try { ctrl.abort(); } catch (e) {} }
+        reject(new Error('timeout'));
+      }, 10000);
+      fetch(OTA_ENDPOINT, opts).then(function(r){ clearTimeout(timer); resolve(r); },
+                                     function(e){ clearTimeout(timer); reject(e); });
+    });
+  }
+  return otaFetch()
     .then(function(r){ if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
     .then(function(m){
       if (!m || !m.version) throw new Error('bad manifest');
@@ -1552,6 +1583,8 @@ function checkForUpdates(interactive){
 
 if ($('app-version-line')) $('app-version-line').textContent = 'v' + APP_VERSION;
 if ($('btn-check-updates')) $('btn-check-updates').addEventListener('click', function(){ checkForUpdates(true); });
+// 1.3.1 - the escape hatch in the UI, for a cache that disagrees with the server.
+if ($('btn-reload-page')) $('btn-reload-page').addEventListener('click', function(){ hardReload(APP_VERSION); });
 
 // On start: wire the worker, then ask the published manifest what is out there. The check
 // waits for 'load' so it never competes with the app's own first paint, and a release the

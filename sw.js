@@ -1,8 +1,12 @@
 // CACHE is stamped from app.js APP_VERSION by dev/ota.mjs - a released version always
 // brings a cache of its own, and activate drops everything older.
-var CACHE = 'measuret-v1.3.0';
+var CACHE = 'measuret-v1.3.1';
+// 1.3.1 - VER is the version the page stamps onto its script address, so the precache asks
+// for the same file the page will ask for (and keeps the plain address for older pages).
+var VER = CACHE.replace('measuret-v', '');
 var ASSETS = [
   './index.html',
+  './app.js?v=' + VER,
   './app.js',
   './manifest.json',
   './updates.json',
@@ -43,9 +47,21 @@ self.addEventListener('fetch', function(e){
   if (!url.protocol.startsWith('http') || url.origin !== self.location.origin) return;
 
   var isDocument = e.request.mode === 'navigate' || e.request.destination === 'document';
-  var netRequest = isDocument
-    ? new Request(e.request.url, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin' })
-    : e.request;
+  // 1.3.1 - EVERY FILE GOES TO THE NETWORK WITH THE CACHE OFF, not just the page. GitHub
+  // Pages serves each of them with max-age=600, so app.js could come out of the WebView's
+  // HTTP cache while the page was already new: the app showed the version from the old
+  // script, the feed kept offering the new one, and every "Update now" reloaded into the
+  // same stale script. That loop is what this replaces.
+  // A navigation request cannot be copied into a Request (the spec forbids it), so the
+  // document is rebuilt from its URL; everything else keeps its own headers and only loses
+  // its cache mode. The offline fallback below is untouched.
+  var netRequest;
+  if (isDocument){
+    netRequest = new Request(e.request.url, { cache: 'no-store', credentials: 'same-origin', mode: 'same-origin' });
+  } else {
+    try { netRequest = new Request(e.request, { cache: 'no-store' }); }
+    catch (err) { netRequest = new Request(e.request.url, { cache: 'no-store' }); }
+  }
 
   e.respondWith(
     fetch(netRequest).then(function(res){
