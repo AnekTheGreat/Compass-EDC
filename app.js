@@ -6,9 +6,15 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.2.3';
+var APP_VERSION = '1.3.0';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.3.0', date: 'November 6, 2026', title: 'A Time chip in Convert: what time it is anywhere, and how far that is from you', items: [
+    'A <b>Time</b> chip now sits at the end of the Convert row. Pick a place from the searchable list &mdash; about fifty of them, from <b>London</b> and <b>Lagos</b> to <b>Tokyo</b> and <b>Auckland</b> &mdash; and the card shows the time there, the day there, and the gap from your own clock in words: <b>3 hours ahead of you</b>, <b>the same time as you</b>, <b>5 hours 45 minutes behind you</b>.',
+    'Your own time sits under it, so both clocks are on one screen, and the place you last picked is remembered &mdash; reopening the chip shows the same clock instead of an empty card.',
+    'The times come from the phone&rsquo;s own time-zone database, so daylight saving is whatever each place is actually doing that day: London and New York change on their own dates, and neither of them is your date.',
+    'Nothing else changed &mdash; elevation, location, the level, the unit converter and its six categories, currency, GPS measuring, the AR range finder, permissions and updates are exactly as they were.'
+  ]},
   { version: '1.2.3', date: 'November 5, 2026', title: 'The other apps are on the Settings tab, and the build proves which key signed it', items: [
     'Settings now ends with <b>More apps</b>: <b>UJournal</b>, <b>FamTM</b>, <b>My Hub</b> and <b>SideCut</b>, each with what it does and a <b>Get</b> button that opens its Play listing. MeasureT is the fourth app in the other apps&rsquo; own lists, and it was still being called Compass EDC there.',
     'The <b>Android build</b> now checks the certificate on the release APK against MeasureT&rsquo;s upload certificate and <b>fails</b> if they differ. Before this it printed the certificate and passed whatever it found, so a keystore that Play would reject still produced files that looked ready to upload.',
@@ -404,6 +410,7 @@ $('toggle-24h').addEventListener('click', function(){
   localStorage.setItem('cedc_24h', state.use24h ? '1' : '0');
   $('toggle-24h').classList.toggle('on', state.use24h);
   updateSunTimes();
+  tzRefresh();
 });
 
 $('toggle-wakelock').addEventListener('click', function(){
@@ -514,6 +521,15 @@ function setCovDefaults(cat){
 function setCovCat(cat){
   covCat = cat;
   document.querySelectorAll('.cov-chip').forEach(function(c){ c.classList.toggle('on', c.getAttribute('data-cat') === cat); });
+  // 1.3.0 - Time is a chip like the others, but it is not a unit table: it hides the two
+  // converter cards and shows the clock panel in their place, instead of refilling the
+  // selects. Their values are left alone, so going back to Length lands where it was.
+  var isTime = cat === 'time';
+  if ($('cov-unit-card')) $('cov-unit-card').style.display = isTime ? 'none' : '';
+  if ($('cov-method-card')) $('cov-method-card').style.display = isTime ? 'none' : '';
+  if ($('cov-tz-view')) $('cov-tz-view').style.display = isTime ? '' : 'none';
+  if (isTime){ tzOn(); return; }
+  tzOff();
   fillCovSelects();
   updateCovResult();
 }
@@ -528,6 +544,13 @@ function buildCovChips(){
     b.addEventListener('click', function(){ setCovCat(k); });
     row.appendChild(b);
   });
+  // 1.3.0 - the clock, last so the six unit tables keep the order people know.
+  var t = document.createElement('button');
+  t.className = 'cov-chip' + (covCat === 'time' ? ' on' : '');
+  t.setAttribute('data-cat', 'time');
+  t.textContent = 'Time';
+  t.addEventListener('click', function(){ setCovCat('time'); });
+  row.appendChild(t);
 }
 function getCovMethod(cat, from, to){
   if (CONVERTERS[cat].special) return 'To convert: ' + (tempMethod[from + to] || '');
@@ -540,12 +563,237 @@ function getCovEquation(cat, from, to){
   return '1 ' + UNIT_SHORT[from] + ' = ' + numFmt(factor) + ' ' + UNIT_SHORT[to];
 }
 function updateCovResult(){
+  if (covCat === 'time') return; // the clock panel has no two-unit answer to print
   var from = $('cov-from').value, to = $('cov-to').value;
   var v = parseFloat($('cov-value').value);
   $('cov-equation').textContent = getCovEquation(covCat, from, to);
   $('cov-method-text').textContent = getCovMethod(covCat, from, to);
   if (isNaN(v)){ $('cov-result').textContent = '--'; return; }
   $('cov-result').textContent = resultFmt(convertValue(covCat, v, from, to)) + ' ' + UNIT_SHORT[to];
+}
+
+// ---------- TIME ZONES (1.3.0) ----------
+// The seventh chip of the Convert row: what time it is somewhere else, and how far that is
+// from here. Nothing here is a fixed offset. Every answer comes from Intl, i.e. the
+// time-zone database the phone itself carries, so daylight saving is whatever that place
+// is doing on that date - the clocks in London and New York move on their own dates, and a
+// zone that stopped observing DST last year is simply right.
+var TZ_KEY = 'cedc_tz_place';
+var TZ_PLACES = [
+  ['London', 'United Kingdom', 'Europe/London'],
+  ['Dublin', 'Ireland', 'Europe/Dublin'],
+  ['Lisbon', 'Portugal', 'Europe/Lisbon'],
+  ['Reykjavik', 'Iceland', 'Atlantic/Reykjavik'],
+  ['Paris', 'France', 'Europe/Paris'],
+  ['Berlin', 'Germany', 'Europe/Berlin'],
+  ['Madrid', 'Spain', 'Europe/Madrid'],
+  ['Rome', 'Italy', 'Europe/Rome'],
+  ['Amsterdam', 'Netherlands', 'Europe/Amsterdam'],
+  ['Zurich', 'Switzerland', 'Europe/Zurich'],
+  ['Stockholm', 'Sweden', 'Europe/Stockholm'],
+  ['Warsaw', 'Poland', 'Europe/Warsaw'],
+  ['Athens', 'Greece', 'Europe/Athens'],
+  ['Istanbul', 'Turkey', 'Europe/Istanbul'],
+  ['Moscow', 'Russia', 'Europe/Moscow'],
+  ['Lagos', 'Nigeria', 'Africa/Lagos'],
+  ['Nairobi', 'Kenya', 'Africa/Nairobi'],
+  ['Cairo', 'Egypt', 'Africa/Cairo'],
+  ['Johannesburg', 'South Africa', 'Africa/Johannesburg'],
+  ['Casablanca', 'Morocco', 'Africa/Casablanca'],
+  ['Dubai', 'United Arab Emirates', 'Asia/Dubai'],
+  ['Riyadh', 'Saudi Arabia', 'Asia/Riyadh'],
+  ['Tehran', 'Iran', 'Asia/Tehran'],
+  ['Karachi', 'Pakistan', 'Asia/Karachi'],
+  ['Delhi', 'India', 'Asia/Kolkata'],
+  ['Kathmandu', 'Nepal', 'Asia/Kathmandu'],
+  ['Dhaka', 'Bangladesh', 'Asia/Dhaka'],
+  ['Yangon', 'Myanmar', 'Asia/Yangon'],
+  ['Bangkok', 'Thailand', 'Asia/Bangkok'],
+  ['Jakarta', 'Indonesia', 'Asia/Jakarta'],
+  ['Singapore', 'Singapore', 'Asia/Singapore'],
+  ['Hong Kong', 'China', 'Asia/Hong_Kong'],
+  ['Shanghai', 'China', 'Asia/Shanghai'],
+  ['Tokyo', 'Japan', 'Asia/Tokyo'],
+  ['Seoul', 'South Korea', 'Asia/Seoul'],
+  ['Adelaide', 'Australia', 'Australia/Adelaide'],
+  ['Sydney', 'Australia', 'Australia/Sydney'],
+  ['Melbourne', 'Australia', 'Australia/Melbourne'],
+  ['Auckland', 'New Zealand', 'Pacific/Auckland'],
+  ['Honolulu', 'United States', 'Pacific/Honolulu'],
+  ['Anchorage', 'United States', 'America/Anchorage'],
+  ['Vancouver', 'Canada', 'America/Vancouver'],
+  ['Los Angeles', 'United States', 'America/Los_Angeles'],
+  ['Denver', 'United States', 'America/Denver'],
+  ['Phoenix', 'United States', 'America/Phoenix'],
+  ['Chicago', 'United States', 'America/Chicago'],
+  ['Mexico City', 'Mexico', 'America/Mexico_City'],
+  ['New York', 'United States', 'America/New_York'],
+  ['Toronto', 'Canada', 'America/Toronto'],
+  ['Bogota', 'Colombia', 'America/Bogota'],
+  ['Lima', 'Peru', 'America/Lima'],
+  ['Sao Paulo', 'Brazil', 'America/Sao_Paulo'],
+  ['Buenos Aires', 'Argentina', 'America/Argentina/Buenos_Aires'],
+  ['Santiago', 'Chile', 'America/Santiago']
+];
+var tzPlace = storeGet(TZ_KEY);
+var tzTimer = null;
+var tzUsable = true;
+try {
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London' }).format(new Date());
+} catch (e) {
+  tzUsable = false; // a WebView without time-zone data; the chip says so rather than lie
+}
+
+function tzSpot(){
+  for (var i = 0; i < TZ_PLACES.length; i++){ if (TZ_PLACES[i][2] === tzPlace) return TZ_PLACES[i]; }
+  tzPlace = 'Europe/London';
+  return TZ_PLACES[0];
+}
+// en-GB for 24-hour (it prints 21:05), the phone's own locale for 12-hour (it prints 9:05 PM),
+// and 24:xx folded back to 00:xx because some locales spell midnight that way.
+function tzClock(zone, d){
+  var opt = { timeZone: zone, hour: '2-digit', minute: '2-digit', hour12: !state.use24h };
+  var s = new Intl.DateTimeFormat(state.use24h ? 'en-GB' : undefined, opt).format(d);
+  return s.replace(/^24:/, '00:');
+}
+function tzHereClock(d){
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: !state.use24h });
+}
+function tzHereZone(){
+  try {
+    var z = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return z ? z.replace(/_/g, ' ') : 'your time zone';
+  } catch (e) { return 'your time zone'; }
+}
+function tzDay(zone, d){
+  return new Intl.DateTimeFormat(undefined, { timeZone: zone, weekday: 'long', day: 'numeric', month: 'long' }).format(d);
+}
+// A zone's offset from UTC in minutes, read off its own wall clock: format the instant in
+// that zone, reassemble those fields as if they were UTC, and compare with the instant.
+function tzOffsetMin(zone, d){
+  var parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).formatToParts(d);
+  var p = {};
+  for (var i = 0; i < parts.length; i++){ if (parts[i].type !== 'literal') p[parts[i].type] = parts[i].value; }
+  var h = parseInt(p.hour, 10); if (h === 24) h = 0;
+  var asUTC = Date.UTC(parseInt(p.year, 10), parseInt(p.month, 10) - 1, parseInt(p.day, 10),
+                       h, parseInt(p.minute, 10), parseInt(p.second, 10));
+  return Math.round((asUTC - Math.floor(d.getTime() / 1000) * 1000) / 60000);
+}
+// Positive means the place is ahead of you. getTimezoneOffset() is minutes to ADD to local
+// time to reach UTC, so local offset east is its negative.
+function tzDiffMin(zone, d){ return tzOffsetMin(zone, d) + d.getTimezoneOffset(); }
+function tzSpanText(mins){
+  var a = Math.abs(mins), h = Math.floor(a / 60), m = a % 60, bits = [];
+  if (h) bits.push(h + (h === 1 ? ' hour' : ' hours'));
+  if (m) bits.push(m + (m === 1 ? ' minute' : ' minutes'));
+  return bits.join(' ');
+}
+function tzDiffLong(mins){
+  if (mins === 0) return 'The same time as you';
+  return tzSpanText(mins) + (mins > 0 ? ' ahead of you' : ' behind you');
+}
+function tzDiffShort(mins){
+  if (mins === 0) return 'same';
+  var a = Math.abs(mins), h = Math.floor(a / 60), m = a % 60;
+  return (mins > 0 ? '+' : '-') + h + 'h' + (m ? ' ' + m + 'm' : '');
+}
+// yyyy-mm-dd in a zone, which is what makes "tomorrow there" answerable: two places can be
+// on different dates at the same instant.
+function tzStamp(zone, d){
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+function tzStampIndex(s){
+  var p = s.split('-');
+  return Math.round(Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)) / 86400000);
+}
+function tzRender(){
+  if (!tzUsable || !$('tz-time')) return;
+  var now = new Date(), spot = tzSpot();
+  var diff = tzDiffMin(spot[2], now);
+  var shift = tzStampIndex(tzStamp(spot[2], now)) - tzStampIndex(tzStamp(undefined, now));
+  var when = shift > 0 ? 'Tomorrow, ' : (shift < 0 ? 'Yesterday, ' : '');
+  $('tz-place-label').textContent = spot[0] + ' \u00b7 ' + spot[1];
+  $('tz-time').textContent = tzClock(spot[2], now);
+  $('tz-day').textContent = when + tzDay(spot[2], now);
+  $('tz-diff').textContent = tzDiffLong(diff);
+  $('tz-diff').classList.toggle('same', diff === 0);
+  $('tz-you-time').textContent = tzHereClock(now);
+  $('tz-you-zone').textContent = tzHereZone();
+}
+function tzBuildList(){
+  var row = $('tz-list');
+  if (!row) return;
+  var q = ($('tz-search').value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  var now = new Date(), shown = 0;
+  row.innerHTML = '';
+  for (var i = 0; i < TZ_PLACES.length; i++){
+    var p = TZ_PLACES[i];
+    if (q && (p[0] + ' ' + p[1] + ' ' + p[2]).toLowerCase().indexOf(q) === -1) continue;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tz-item' + (p[2] === tzPlace ? ' on' : '');
+    b.setAttribute('data-zone', p[2]);
+    var name = document.createElement('span');
+    name.className = 'tz-item-name';
+    var city = document.createElement('b'); city.textContent = p[0];
+    var land = document.createElement('span'); land.textContent = p[1];
+    name.appendChild(city); name.appendChild(land);
+    var right = document.createElement('span');
+    right.className = 'tz-item-right';
+    var tm = document.createElement('b'); tm.className = 'tz-item-time'; tm.textContent = tzClock(p[2], now);
+    var df = document.createElement('span'); df.className = 'tz-item-diff'; df.textContent = tzDiffShort(tzDiffMin(p[2], now));
+    right.appendChild(tm); right.appendChild(df);
+    b.appendChild(name); b.appendChild(right);
+    b.addEventListener('click', function(zone){ return function(){ tzPick(zone); }; }(p[2]));
+    row.appendChild(b);
+    shown++;
+  }
+  if ($('tz-hint')){
+    $('tz-hint').textContent = (shown || !tzUsable) ? '' : 'No place by that name. Try a city or a country \u2014 Tokyo, Nigeria, Spain.';
+  }
+}
+function tzPick(zone){
+  tzPlace = zone;
+  storeSet(TZ_KEY, zone);
+  tzRender();
+  tzBuildList();
+}
+// The clock only ticks while it is the thing on screen: a tab change sets covCat away from
+// 'time' and stops the timer, so nothing redraws behind a screen nobody is looking at.
+function tzTick(){
+  if (covCat !== 'time' || !tzUsable) return;
+  var scr = $('convert-screen'), view = $('cov-convert-view');
+  if (!scr || !scr.classList.contains('active')) return;
+  if (!view || view.style.display === 'none') return;
+  tzRender();
+  var rows = $('tz-list') ? $('tz-list').querySelectorAll('[data-zone]') : [];
+  var now = new Date();
+  for (var i = 0; i < rows.length; i++){
+    var t = rows[i].querySelector('.tz-item-time');
+    if (t) t.textContent = tzClock(rows[i].getAttribute('data-zone'), now);
+  }
+}
+function tzOn(){
+  if (!tzUsable){
+    if ($('tz-hint')) $('tz-hint').textContent = 'This phone\u2019s browser cannot look up other time zones.';
+    return;
+  }
+  tzRender();
+  tzBuildList();
+  if (!tzTimer) tzTimer = setInterval(tzTick, 10000);
+}
+function tzOff(){
+  if (tzTimer){ clearInterval(tzTimer); tzTimer = null; }
+}
+// Called when the 24-hour setting changes, so the clock follows it without waiting a tick.
+function tzRefresh(){ if (covCat === 'time') tzRender(); }
+function tzInit(){
+  if ($('tz-search')) $('tz-search').addEventListener('input', tzBuildList);
+  if (!tzUsable && $('tz-hint')) $('tz-hint').textContent = 'This phone\u2019s browser cannot look up other time zones.';
 }
 
 function haversine(lat1, lon1, lat2, lon2){
@@ -815,6 +1063,7 @@ $('ar-mode-person').addEventListener('click', function(){ setARMode('person'); }
 buildCovChips();
 fillCovSelects();
 updateCovResult();
+tzInit();
 
 // periodic redraw for graph resize
 window.addEventListener('resize', drawElevGraph);

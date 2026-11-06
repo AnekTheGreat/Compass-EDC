@@ -12,6 +12,15 @@ upload), `MeasureT-<version>-release.apk` (the same build, installable), and the
 `MeasureT-<version>-debug.apk` / `MeasureT-<version>-debug.aab`. The release pair is signed with
 the upload keystore, and the run fails rather than hand over an unsigned bundle.
 
+## 1.3.0 — November 6, 2026
+
+**A Time chip in Convert: what time it is anywhere, and how far that is from you**
+
+- A **Time** chip sits at the end of the Convert row. Pick a place from the searchable list — about fifty, from London and Lagos to Tokyo and Auckland — and the card shows the time there, the day there, and the gap from your own clock in words: **3 hours ahead of you**, **the same time as you**, **5 hours 45 minutes behind you**.
+- Your own time sits under it, both clocks on one screen, and the last place you picked is remembered.
+- The times come from the phone's own time-zone database, so daylight saving is whatever each place is actually doing on that date.
+- Nothing else changed — elevation, location, the level, the unit converter and its six categories, currency, GPS measuring, the AR range finder, permissions and updates are as they were.
+
 ## 1.2.3 — November 5, 2026
 
 **The other apps are on the Settings tab, and the build proves which key signed it**

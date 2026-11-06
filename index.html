@@ -165,6 +165,29 @@ body::before{
 .cov-result{font-size:36px;font-weight:200;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-0.5px;}
 .cov-method{font-size:14px;color:var(--text);margin-top:10px;line-height:1.5;}
 .cov-equation{font-size:13px;color:var(--dim);margin-top:8px;font-variant-numeric:tabular-nums;}
+/* 1.3.0 - TIME ZONES. The seventh chip on the Convert row is a clock, not a unit table:
+   one place's time in large type, its day, the gap from your own clock, and a searchable
+   list of places under it. Times are tabular so the ticking numbers do not jitter. */
+.tz-time{font-size:46px;font-weight:200;color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:-1px;line-height:1.05;margin-top:6px;}
+.tz-day{font-size:13px;color:var(--dim);margin-top:2px;}
+.tz-diff{font-size:15px;color:#2f8fd6;margin-top:12px;font-weight:500;line-height:1.4;}
+.tz-diff.same{color:var(--dim);}
+.tz-you{font-size:12px;color:var(--dim);margin-top:10px;padding-top:10px;border-top:1px solid var(--glass-line);line-height:1.5;}
+.tz-you b{color:var(--text);font-weight:500;font-variant-numeric:tabular-nums;}
+#tz-search{width:100%;box-sizing:border-box;margin-top:8px;padding:11px 13px;border-radius:13px;background:rgba(255,255,255,0.55);border:1px solid var(--glass-line);font-size:15px;color:var(--text);outline:none;-webkit-appearance:none;appearance:none;}
+#tz-search::placeholder{color:var(--dimmer);}
+.tz-list{max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:10px;}
+.tz-item{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;padding:11px 2px;background:none;border:none;border-bottom:1px solid rgba(14,51,80,0.07);text-align:left;font-family:inherit;color:var(--text);}
+.tz-item:last-child{border-bottom:none;}
+.tz-item.on{color:#2f8fd6;}
+.tz-item-name{display:flex;flex-direction:column;min-width:0;}
+.tz-item-name b{font-size:14px;font-weight:500;}
+.tz-item-name span{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tz-item.on .tz-item-name span{color:#2f8fd6;}
+.tz-item-right{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;}
+.tz-item-time{font-size:15px;font-weight:500;font-variant-numeric:tabular-nums;}
+.tz-item-diff{font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums;}
+.tz-hint{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.5;}
 .cov-actions{display:flex;gap:10px;margin-top:16px;}
 .cov-action{flex:1;padding:14px 0;border:none;border-radius:15px;font-size:13px;letter-spacing:1px;color:var(--dim);background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(255,255,255,0.8);}
 .cov-action.primary{color:#fff;background:linear-gradient(180deg,#5bb8f2,#2f8fd6);border-color:#2f8fd6;box-shadow:inset 0 1px 0 rgba(255,255,255,0.4), 0 4px 12px rgba(47,143,214,0.3);}
@@ -442,7 +465,7 @@ nav .navlabel{
     <div id="cov-convert-view">
       <div class="chip-row" id="cov-cats"></div>
 
-      <div class="card glass" style="margin-top:16px;">
+      <div class="card glass" id="cov-unit-card" style="margin-top:16px;">
         <div class="cov-inputrow">
           <input id="cov-value" type="number" inputmode="decimal" placeholder="Enter value" value="1">
           <button class="cov-swap" id="cov-swap" title="Swap units">&#8645;</button>
@@ -457,10 +480,30 @@ nav .navlabel{
         </div>
       </div>
 
-      <div class="card glass" style="margin-top:12px;">
+      <div class="card glass" id="cov-method-card" style="margin-top:12px;">
         <div class="l">How to convert</div>
         <div class="cov-method" id="cov-method-text">Pick two units to see the method.</div>
         <div class="cov-equation" id="cov-equation"></div>
+      </div>
+    </div>
+
+    <!-- 1.3.0 - THE TIME CHIP. Not a unit table: a clock. Pick a place and this card says
+         what time it is there, which day it is there, and how far that is from your own
+         clock - "3 hours ahead of you" - with the searchable list of places under it. -->
+    <div id="cov-tz-view" style="display:none;">
+      <div class="card glass" style="margin-top:16px;">
+        <div class="l" id="tz-place-label">Place</div>
+        <div class="tz-time" id="tz-time">--:--</div>
+        <div class="tz-day" id="tz-day">&nbsp;</div>
+        <div class="tz-diff" id="tz-diff">Pick a place below.</div>
+        <div class="tz-you">Your time <b id="tz-you-time">--:--</b> &middot; <span id="tz-you-zone">your time zone</span></div>
+      </div>
+
+      <div class="card glass" style="margin-top:12px;">
+        <div class="l">Pick a place</div>
+        <input id="tz-search" type="search" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="City, country or zone">
+        <div class="tz-list" id="tz-list"></div>
+        <div class="tz-hint" id="tz-hint"></div>
       </div>
     </div>
 
@@ -692,7 +735,7 @@ nav .navlabel{
       <div class="set-row"><div><div class="label">SideCut</div><div class="sub">A music player with its own equaliser</div></div><a class="unitbtn" style="text-decoration:none" href="https://play.google.com/store/apps/details?id=com.SideCut.myapp" target="_blank" rel="noopener noreferrer">Get</a></div>
     </div>
 
-    <div class="about-line">MeasureT <span id="app-version-line">v1.2.3</span> &middot; sensors: orientation, GPS, motion</div>
+    <div class="about-line">MeasureT <span id="app-version-line">v1.3.0</span> &middot; sensors: orientation, GPS, motion</div>
   </section>
 
   <nav>
