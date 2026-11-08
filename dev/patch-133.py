@@ -2,15 +2,14 @@
 """MeasureT 1.3.3 - the same five apps, at addresses that answer.
 
 This list already carried all five siblings, which is more than most of the family managed, but four
-of its five rows opened Play listings that do not exist yet, and the note under them said a not-live
-listing would answer with Play's own page. That is what a tap did: nothing worth having.
+of its five rows opened Play listings that do not exist yet. 1.3.3 gives every row an address that
+answers today, with the same one-line descriptions the other apps use.
 
-1.3.3 gives every row an address that answers today - SideCut its Play listing, My Hub, FamTM and
-UJournal the release they install from, and UNote its page - with the same one-line descriptions the
-other apps use, so the shelf reads the same everywhere.
+The page and app.js had also drifted apart: index.html still said v1.3.1 while app.js was v1.3.2.
+Both say 1.3.3 now.
 
-The page and app.js had drifted apart: index.html still said v1.3.1 while app.js was v1.3.2. Both say
-1.3.3 now.
+--check says whether the tree ALREADY carries the change, which is what the apply workflow asks it
+before deciding there is nothing to do.
 
     python3 dev/patch-133.py            # apply
     python3 dev/patch-133.py --check    # verify only, writes nothing
@@ -85,7 +84,6 @@ def main():
     feed = read(FEED)
     touched = []
 
-    # ---- the list itself ----
     if ROWS_NEW not in page:
         if 'id="other-apps"' not in page:
             sys.exit("the page has no other-apps section")
@@ -106,7 +104,6 @@ def main():
         page = page.replace("app.js?v=" + OLD_PAGE, "app.js?v=" + V, 1)
         touched.append("the version in the page")
 
-    # ---- the app's own version and changelog ----
     if ("var APP_VERSION = '%s';" % V) not in app:
         if ("var APP_VERSION = '%s';" % OLD) not in app:
             sys.exit("app.js does not name %s" % OLD)
@@ -154,8 +151,9 @@ def main():
         sys.exit("; ".join(bad))
 
     if check:
+        if touched:
+            sys.exit("the tree does not carry %s yet (%s)" % (V, ", ".join(touched)))
         print("all %d checks pass - the tree carries MeasureT %s" % (len(probes), V))
-        print("untouched this run" if not touched else "applied: " + ", ".join(touched))
         return
 
     write(PAGE, page)
