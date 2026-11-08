@@ -6,9 +6,14 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.3.2';
+var APP_VERSION = '1.3.3';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+    { version: '1.3.3', date: 'November 8, 2026', title: 'All five rows answer', items: [
+      'More apps lists the same five apps the rest of the family lists, in the same order and with the same one-line descriptions.',
+      'Four of the five rows pointed at Play listings that are not up yet, so a tap answered with Play\'s own not-found page. My Hub, FamTM and UJournal now open the release they install from, and UNote opens its page. SideCut keeps its live listing.',
+      'The version line in the page caught up with the app: it said v1.3.1 while the code was already at 1.3.2.',
+    ] },
   { version: '1.3.2', date: 'November 8, 2026', title: 'UNote is on the More apps list', items: [
     'UNote is on the More apps list, reading &ldquo;Notes that link themselves, with a vault behind a PIN&rdquo;. It is a page rather than a store listing, so the row opens it in the phone&rsquo;s own browser &mdash; nothing to install and nothing to update.',
     'Everything else is as it was: the compass, the elevation, the location and the level.',

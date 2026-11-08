@@ -1,1 +1,9 @@
-{"version":"1.3.2","url":"index.html","notes":["UNote is on the More apps list, reading &ldquo;Notes that link themselves, with a vault behind a PIN&rdquo;. It is a page rather than a store listing, so the row opens it in the phone&rsquo;s own browser &mdash; nothing to install and nothing to update.","Everything else is as it was: the compass, the elevation, the location and the level."],"date":"November 8, 2026"}
+{
+  "version": "1.3.3",
+  "url": "index.html",
+  "notes": [
+    "More apps lists the same five apps the rest of the family lists, in the same order and with the same one-line descriptions: My Hub, FamTM, SideCut, UJournal and UNote.",
+    "Four of the five rows pointed at Play listings that are not up yet, so a tap answered with Play's own not-found page. My Hub, FamTM and UJournal now open the release they install from, and UNote opens its page. SideCut keeps its live listing."
+  ],
+  "date": "November 8, 2026"
+}
