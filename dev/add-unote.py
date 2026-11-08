@@ -8,7 +8,8 @@ import io
 import sys
 
 PAGE = 'index.html'
-URL = 'https://site-e28e804444934263a1f0838974d59f45.freebuff.page/'
+URL = 'https://anekthegreat.github.io/UNote/'
+APK = 'https://github.com/AnekTheGreat/UNote/releases/latest/download/UNote.apk'
 text = io.open(PAGE, encoding='utf-8').read()
 
 if '>UNote<' in text:
