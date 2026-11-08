@@ -1,6 +1,6 @@
 // CACHE is stamped from app.js APP_VERSION by dev/ota.mjs - a released version always
 // brings a cache of its own, and activate drops everything older.
-var CACHE = 'measuret-v1.3.1';
+var CACHE = 'measuret-v1.3.2';
 // 1.3.1 - VER is the version the page stamps onto its script address, so the precache asks
 // for the same file the page will ask for (and keeps the plain address for older pages).
 var VER = CACHE.replace('measuret-v', '');

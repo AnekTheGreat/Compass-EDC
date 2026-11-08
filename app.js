@@ -6,9 +6,13 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.3.1';
+var APP_VERSION = '1.3.2';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+  { version: '1.3.2', date: 'November 8, 2026', title: 'UNote is on the More apps list', items: [
+    'UNote is on the More apps list, reading &ldquo;Notes that link themselves, with a vault behind a PIN&rdquo;. It is a page rather than a store listing, so the row opens it in the phone&rsquo;s own browser &mdash; nothing to install and nothing to update.',
+    'Everything else is as it was: the compass, the elevation, the location and the level.',
+  ]},
   { version: '1.3.1', date: 'November 6, 2026', title: 'Updates that never took: the version loop is gone', items: [
     'Fixed the update that kept getting stuck: the page and its script are each cached for <b>ten minutes</b> by the site that hosts them, and while the page was being fetched fresh the script was not. The app therefore kept reporting the version from the <b>old script</b> while the release feed kept offering the new one &mdash; <b>Update now</b> landed back on the same version, every time.',
     'The script now comes from a <b>versioned address</b>, so every release is a file the phone has never seen and cannot answer from its cache; the service worker also stopped trusting the browser cache for <b>all</b> of the app&rsquo;s files, not only the page.',
