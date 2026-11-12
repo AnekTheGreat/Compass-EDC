@@ -6,9 +6,16 @@
 // ("node dev/ota.mjs" republishes updates.json and stamps sw.js/package.json;
 //  "node dev/ota.mjs --check" fails if any of the four disagree).
 // Cutting a release = bump APP_VERSION, write its CHANGELOG entry at the head, run the tool.
-var APP_VERSION = '1.3.3';
+var APP_VERSION = '1.3.4';
 var OTA_ENDPOINT = 'https://anekthegreat.github.io/Compass-EDC/updates.json';
 var CHANGELOG = [
+    { version: '1.3.4', date: 'November 12, 2026', title: 'Measuring at a distance', items: [
+      'The AR distance reading no longer stops at about thirty metres. The aim angle was clamped to 3 degrees, and eye height divided by tan(3 degrees) is 30.5 m, so every target past roughly thirty metres - a house, a tree, the far end of a field - read the same thirty metres. The floor is gone and the aim is read across the whole range.',
+      'The tilt is smoothed before it is used. A single sensor sample drifts by a fraction of a degree, and eye height divided by tan(angle) turns every fraction into metres out there, which is why the number used to jump about. It follows the aim through a low-pass filter now, and says <b>hold steady</b> while the aim is still moving.',
+      'The reading says how much to trust it: a line under the number gives what half a degree of aim is worth at that distance, e.g. <i>about \u00b1 3 m at this distance</i>. At a very shallow aim it says the number is a guess instead of printing one.',
+      'The sign of the tilt is respected. Holding the phone past vertical used to fold the angle round into nonsense, because the old reading took the absolute value of the tilt; aiming above the horizon now says <b>aim at the base</b>.',
+      'The camera modes read one tilt pipeline, smoothed the way the level smooths its own bubble, so the level and the range finder cannot disagree about how far the phone is tilted.'
+    ] },
     { version: '1.3.3', date: 'November 8, 2026', title: 'All five rows answer', items: [
       'More apps lists the same five apps the rest of the family lists, in the same order and with the same one-line descriptions.',
       'Four of the five rows pointed at Play listings that are not up yet, so a tap answered with Play\'s own not-found page. My Hub, FamTM and UJournal now open the release they install from, and UNote opens its page. SideCut keeps its live listing.',
@@ -929,8 +936,14 @@ $('btn-measure-reset').addEventListener('click', resetMeasure);
 
 // AR distance (tilt-based ranging via camera viewfinder)
 var arActive = false, arStream = null, arTimer = null;
-window.__arBeta = null;
-window.__arBetaRaw = null;
+// 1.3.4 - one tilt pipeline. `beta`: 0 is flat on its back (camera at the floor), 90 is
+// upright (camera level), 180 is flat on its face. The aim is 90 - beta, positive aimed
+// down. The old reading kept Math.abs(beta) and clamped the aim to 3 degrees, and eye
+// height over tan(3 degrees) is 30.5 m - which is why everything past thirty metres read
+// thirty metres.
+var arTilt = null;        // smoothed aim in degrees, + = aimed down, - = aimed up
+var arJitter = 0;         // how far the raw aim moves between samples, in degrees
+var arPrevAim = null;
 var arHeight = parseFloat(localStorage.getItem('cedc_arheight')) || 1.6;
 $('ar-height').value = arHeight;
 $('ar-person-height').value = arHeight;
@@ -949,12 +962,24 @@ function setArPhoneHeight(v){
 }
 $('ar-height').addEventListener('input', function(){ setArPhoneHeight(parseFloat(this.value)); });
 $('ar-person-height').addEventListener('input', function(){ setArPhoneHeight(parseFloat(this.value)); });
-window.addEventListener('deviceorientation', function(e){
-  if (arActive && e.beta != null){ window.__arBetaRaw = e.beta; window.__arBeta = Math.abs(e.beta); }
-});
+function arAimFromBeta(beta){
+  if (beta == null || !isFinite(beta)) return null;
+  // Outside this the phone is upside down, which is not an aim at anything.
+  if (beta < -90 || beta > 180) return null;
+  return 90 - beta;
+}
+function arFeedTilt(beta){
+  var aim = arAimFromBeta(beta);
+  if (aim == null) return;
+  if (arTilt == null) arTilt = aim;
+  else arTilt += (aim - arTilt) * 0.22;   // the sensor moves by fractions of a degree
+  if (arPrevAim != null) arJitter += (Math.abs(aim - arPrevAim) - arJitter) * 0.3;
+  arPrevAim = aim;
+}
+window.addEventListener('deviceorientationabsolute', function(e){ if (arActive) arFeedTilt(e.beta); }, true);
+window.addEventListener('deviceorientation', function(e){ if (arActive) arFeedTilt(e.beta); }, true);
 function arAimDelta(){ // signed degrees below horizontal (+ = aiming down)
-  if (window.__arBetaRaw == null) return null;
-  return 90 - window.__arBetaRaw;
+  return arTilt == null ? null : arTilt;
 }
 function arReportHeight(){
   if (!arActive){ $('ar-height-dist').textContent = '--'; return; }
@@ -991,16 +1016,35 @@ function arReportPerson(){
 function setARStatus(t){ $('ar-status').textContent = t || ''; }
 function arReport(){
   if (!arActive) return;
-  if (window.__arBeta == null){ $('ar-dist').textContent = 'Hold steady &amp; aim downward'; return; }
-  var theta = 90 - window.__arBeta; // degrees below horizontal
-  theta = Math.abs(theta);
-  theta = Math.max(3, Math.min(87, theta));
-  var m = arHeight / Math.tan(theta * Math.PI / 180);
+  if (arTilt == null){
+    $('ar-dist').textContent = 'Hold steady & aim down';
+    setARStatus('Hold the phone still for a moment so the tilt can settle.');
+    return;
+  }
+  var theta = arTilt;
+  if (theta < 0.4){
+    $('ar-dist').textContent = 'Aim at the base';
+    setARStatus('The camera is level: put the crosshair where the object meets the ground.');
+    arReportPerson();
+    return;
+  }
+  var deg = Math.min(88, theta);
+  var m = arHeight / Math.tan(deg * Math.PI / 180);
   $('ar-dist').textContent = formatDistance(m);
+  // Half a degree of aim is worth this many metres here; below about 2.5 degrees the answer
+  // is a guess dressed up as a number, and it says so.
+  var near = arHeight / Math.tan(Math.min(88, deg + 0.5) * Math.PI / 180);
+  var far = arHeight / Math.tan(Math.max(0.4, deg - 0.5) * Math.PI / 180);
+  var spread = Math.max(0.5, (far - near) / 2);
+  var shown = spread >= 1 ? String(Math.round(spread)) : spread.toFixed(1);
+  if (deg < 2.5) setARStatus('Very shallow aim - about \u00b1 ' + shown + ' m out here. Step closer for a number worth trusting.');
+  else if (arJitter > 1.2) setARStatus('Hold steady: the aim is moving about ' + arJitter.toFixed(1) + '\u00b0 between readings.');
+  else setARStatus('About \u00b1 ' + shown + ' m at this distance.');
   arReportPerson();
 }
 function stopAR(){
   arActive = false;
+  arTilt = null; arPrevAim = null; arJitter = 0;
   if (arTimer){ clearInterval(arTimer); arTimer = null; }
   if (arStream){ arStream.getTracks().forEach(function(t){ t.stop(); }); arStream = null; }
   if ($('ar-video').srcObject){ $('ar-video').srcObject = null; }
@@ -1023,7 +1067,9 @@ function startAR(){
     v.play().catch(function(){});
     $('btn-ar-toggle').textContent = 'Stop';
     setARStatus('');
-    window.__arBeta = null;
+    arTilt = null;
+    arPrevAim = null;
+    arJitter = 0;
     arTimer = setInterval(arReport, 120);
   }).catch(function(err){
     setARStatus('Could not access camera: ' + err.message);

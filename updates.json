@@ -1,9 +1,1 @@
-{
-  "version": "1.3.3",
-  "url": "index.html",
-  "notes": [
-    "More apps lists the same five apps the rest of the family lists, in the same order and with the same one-line descriptions: My Hub, FamTM, SideCut, UJournal and UNote.",
-    "Four of the five rows pointed at Play listings that are not up yet, so a tap answered with Play's own not-found page. My Hub, FamTM and UJournal now open the release they install from, and UNote opens its page. SideCut keeps its live listing."
-  ],
-  "date": "November 8, 2026"
-}
+{"version":"1.3.4","url":"index.html","notes":["The AR distance reading no longer stops at about thirty metres. The aim angle was clamped to 3 degrees, and eye height divided by tan(3 degrees) is 30.5 m, so every target past roughly thirty metres - a house, a tree, the far end of a field - read the same thirty metres. The floor is gone and the aim is read across the whole range.","The tilt is smoothed before it is used. A single sensor sample drifts by a fraction of a degree, and eye height divided by tan(angle) turns every fraction into metres out there, which is why the number used to jump about. It follows the aim through a low-pass filter now, and says <b>hold steady</b> while the aim is still moving.","The reading says how much to trust it: a line under the number gives what half a degree of aim is worth at that distance, e.g. <i>about ± 3 m at this distance</i>. At a very shallow aim it says the number is a guess instead of printing one.","The sign of the tilt is respected. Holding the phone past vertical used to fold the angle round into nonsense, because the old reading took the absolute value of the tilt; aiming above the horizon now says <b>aim at the base</b>.","The camera modes read one tilt pipeline, smoothed the way the level smooths its own bubble, so the level and the range finder cannot disagree about how far the phone is tilted."],"date":"November 12, 2026"}
